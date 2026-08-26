@@ -1,0 +1,1609 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Relógio</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        html, body { width:100%; height:100%; overflow:hidden; background:#000; }
+        canvas { display:block; width:100vw; height:100vh; background:#000; }
+
+        #configBtn {
+            position:fixed; bottom:20px; left:20px; width:56px; height:56px;
+            border-radius:50%; background:rgba(30,30,30,0.85); border:2px solid rgba(255,255,255,0.3);
+            color:#fff; font-size:28px; display:flex; align-items:center; justify-content:center;
+            cursor:pointer; z-index:20; user-select:none;
+            box-shadow:0 4px 15px rgba(0,0,0,0.6);
+            transition:background 0.2s;
+        }
+        #configBtn.mode-config { background:#c05030; border-color:#ffaa77; }
+        #configBtn.mode-view { background:#3060c0; border-color:#77aaff; }
+        #configBtn.mode-none { background:rgba(30,30,30,0.85); border-color:rgba(255,255,255,0.3); }
+
+        #panel {
+            position:fixed;
+            background:rgba(0,0,0,0.88); backdrop-filter:blur(10px);
+            border:1px solid rgba(255,255,255,0.12);
+            padding:10px 14px 12px 14px;
+            color:#eee;
+            border-radius:14px;
+            min-width:220px;
+            max-width:280px;
+            font-size:13px;
+            box-shadow:0 8px 30px rgba(0,0,0,0.8);
+            z-index:15;
+            display:none;
+            touch-action:none;
+            cursor:grab;
+            user-select:none;
+        }
+        #panel.visible { display:block; }
+        #panel:active { cursor:grabbing; }
+
+        #viewPanel {
+            position:fixed;
+            background:rgba(0,0,0,0.88); backdrop-filter:blur(10px);
+            border:1px solid rgba(255,255,255,0.12);
+            padding:14px 16px 16px 16px;
+            color:#eee;
+            border-radius:16px;
+            min-width:290px;
+            max-width:368px;
+            font-size:17px;
+            box-shadow:0 8px 30px rgba(0,0,0,0.8);
+            z-index:16;
+            display:none;
+            touch-action:none;
+            cursor:grab;
+            user-select:none;
+        }
+        #viewPanel.visible { display:block; }
+        #viewPanel:active { cursor:grabbing; }
+
+        .panel-header {
+            display:flex; justify-content:space-between; align-items:center;
+            margin-bottom:8px;
+            cursor:grab;
+        }
+        .panel-header:active { cursor:grabbing; }
+        .panel-header span { font-size:20px; font-weight:600; color:#ddd; letter-spacing:0.5px; }
+        .close { background:none; border:none; color:#aaa; font-size:22px; cursor:pointer; padding:0 4px; }
+
+        .row {
+            display:flex; align-items:center; gap:5px; 
+            flex-wrap:wrap; 
+            padding:3px 0;
+        }
+        .row label { color:#ccc; min-width:30px; font-size:15px; font-weight:500; }
+        .row .val { color:#ffcc88; font-weight:bold; min-width:32px; text-align:center; font-size:16px; }
+        .btn {
+            background:rgba(255,255,255,0.08); border:none; color:#fff; border-radius:6px;
+            padding:4px 10px; cursor:pointer; font-size:15px; font-weight:500;
+            transition:background 0.15s;
+        }
+        .btn:active { background:rgba(255,255,255,0.2); }
+        .btn.small { padding:3px 7px; font-size:14px; }
+        .btn.save { background:rgba(50,200,100,0.18); color:#8f8; }
+        .btn.reset { background:rgba(255,200,100,0.15); color:#fc8; }
+        .btn.danger { background:rgba(255,80,80,0.15); color:#f88; }
+        .btn.primary { background:rgba(100,150,255,0.15); color:#8bf; }
+        .btn.toggle-on { background:rgba(50,200,100,0.25); color:#8f8; }
+        .btn.toggle-off { background:rgba(255,80,80,0.15); color:#f88; }
+        .btn.test-sound { background:rgba(255,200,50,0.15); color:#fc8; }
+        .sep { height:1px; background:rgba(255,255,255,0.06); margin:6px 0; }
+
+        .image-row {
+            display:flex; align-items:center; gap:5px; flex-wrap:nowrap;
+        }
+        .image-row .url-input {
+            flex:1; min-width:60px;
+            background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08);
+            color:#eee; padding:4px 8px; border-radius:6px; font-size:14px;
+        }
+        .image-row .url-input:focus { outline:1px solid #8bf; }
+        #fileInput, #chimeFileInput { display:none; }
+        #selectImgBtn, #selectChimeBtn {
+            background:rgba(255,255,255,0.05); color:#fff; border:1px dashed rgba(255,255,255,0.12);
+            padding:4px 10px; border-radius:6px; cursor:pointer; font-size:14px;
+            white-space:nowrap;
+        }
+        #selectImgBtn:active, #selectChimeBtn:active { background:rgba(255,255,255,0.1); }
+        .small-text { font-size:13px; color:#999; margin-top:2px; }
+        .img-status { color:#aaa; font-size:13px; word-break:break-all; max-width:100%; }
+
+        .btn-icon { font-size:17px; padding:3px 5px; min-width:28px; }
+        .section-title { color:#aaa; font-size:16px; font-weight:600; letter-spacing:0.5px; }
+
+        #toast {
+            position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.8);
+            background:rgba(0,0,0,0.85); color:#8f8; padding:16px 32px;
+            border-radius:12px; font-size:24px; font-weight:bold;
+            border:2px solid #8f8; box-shadow:0 0 40px rgba(0,255,100,0.3);
+            z-index:60; opacity:0; transition:all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            pointer-events:none; text-align:center;
+        }
+        #toast.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
+        #toast small { display:block; font-size:14px; color:#aaa; font-weight:normal; margin-top:4px; }
+        #toast.error { border-color:#ff6666; color:#ff6666; }
+
+        #debug {
+            position:fixed; bottom:10px; right:10px; color:#888; font-size:9px;
+            z-index:5; font-family:monospace; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:4px;
+        }
+        #debug span { color:#8f8; }
+    </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+
+    <div id="configBtn" title="Configurações" class="mode-none">⚙️</div>
+
+    <div id="panel">
+        <div class="panel-header" id="dragHandle">
+            <span>⚙️ Ajustes</span>
+            <button class="close" id="closePanel">✕</button>
+        </div>
+
+        <div class="row">
+            <label>UTC</label>
+            <button class="btn small" data-tz="-0.25">−</button>
+            <span class="val" id="tzV" style="min-width:36px;">-3.0</span>
+            <button class="btn small" data-tz="+0.25">+</button>
+            <span style="color:#888; font-size:12px;">h</span>
+        </div>
+
+        <div class="sep"></div>
+
+        <!-- Badaladas -->
+        <div class="row" style="justify-content:space-between;">
+            <span style="color:#aaa; font-size:13px;">🔔 Badaladas</span>
+            <button class="btn" id="chimeToggle" style="font-size:13px; padding:2px 12px;">Ligar</button>
+        </div>
+        <div class="row" style="flex-wrap:nowrap; gap:4px; margin-top:2px;">
+            <span style="color:#888; font-size:12px; min-width:30px;">Som:</span>
+            <input type="text" id="chimeUrlInput" class="url-input" placeholder="URL do som" style="flex:1; min-width:60px; font-size:12px;">
+            <button class="btn primary" id="applyChimeBtn" style="font-size:12px; padding:2px 8px;">🔗</button>
+            <button class="btn primary" id="selectChimeBtn" style="font-size:12px; padding:2px 8px;">📁</button>
+            <input type="file" id="chimeFileInput" accept="audio/*">
+        </div>
+        <div class="row" style="gap:4px; margin-top:2px;">
+            <button class="btn test-sound" id="testChimeBtn" style="font-size:13px; padding:2px 12px;">🔊 Testar som</button>
+            <span class="small-text" id="chimeStatus" style="color:#666; margin-left:4px;">Nenhum som selecionado</span>
+        </div>
+        <div class="row" style="margin-top:4px;">
+            <span style="color:#aaa; font-size:12px; min-width:70px;">Intervalo:</span>
+            <button class="btn small" id="chimeIntervalDec" style="font-size:12px; padding:2px 8px;">−</button>
+            <span class="val" id="chimeIntervalDisplay" style="min-width:40px;">3</span>
+            <button class="btn small" id="chimeIntervalInc" style="font-size:12px; padding:2px 8px;">+</button>
+            <span style="color:#888; font-size:12px;">seg</span>
+        </div>
+
+        <div class="sep"></div>
+
+        <!-- Manter tela ligada -->
+        <div class="row" style="justify-content:space-between;">
+            <span style="color:#aaa; font-size:13px;">💡 Manter tela ligada</span>
+            <button class="btn" id="wakeLockToggle" style="font-size:13px; padding:2px 12px;">Ativar</button>
+        </div>
+        <div class="small-text" style="color:#666; margin-left:30px;">A tela será ligada automaticamente 1min antes da hora cheia</div>
+
+        <div class="sep"></div>
+
+        <div class="row" style="justify-content:space-around; gap:3px;">
+            <button class="btn reset" id="resetBtn" style="font-size:13px; padding:3px 10px;">↺ Reset</button>
+            <button class="btn save" id="saveBtn" style="font-size:13px; padding:3px 10px;">💾 Salvar</button>
+            <button class="btn danger" id="clearStorageBtn" style="font-size:12px; padding:2px 8px;">🗑️</button>
+            <button class="btn danger" id="limparTudoBtn" style="font-size:12px; padding:2px 8px;">🔥</button>
+        </div>
+    </div>
+
+    <div id="viewPanel">
+        <div class="panel-header" id="viewDragHandle">
+            <span>📐 Visualização</span>
+            <button class="close" id="closeViewPanel">✕</button>
+        </div>
+
+        <div class="row image-row">
+            <span style="color:#aaa; font-size:15px; min-width:44px;">Imagem</span>
+            <input type="text" id="imageUrlInput" class="url-input" placeholder="URL da imagem">
+            <button class="btn primary" id="applyUrlBtn" style="font-size:13px; padding:2px 8px;">🔗</button>
+            <button class="btn primary" id="selectImgBtn" style="font-size:13px; padding:2px 8px;">📁</button>
+            <input type="file" id="fileInput" accept="image/*">
+        </div>
+        <div class="small-text img-status" id="imgStatus" style="margin-left:44px;">Nenhuma imagem</div>
+        <div class="small-text" id="imgSize" style="margin-left:44px; color:#666;"></div>
+
+        <div class="sep"></div>
+
+        <div class="row">
+            <span style="color:#aaa; font-size:15px; min-width:44px;">Posição</span>
+            <button class="btn btn-icon dir-btn" data-dir="up">▲</button>
+            <button class="btn btn-icon dir-btn" data-dir="down">▼</button>
+            <button class="btn btn-icon dir-btn" data-dir="left">◀</button>
+            <button class="btn btn-icon dir-btn" data-dir="right">▶</button>
+            <span class="val" id="xV" style="min-width:20px;">0</span>
+            <span style="color:#666; font-size:12px;">,</span>
+            <span class="val" id="yV" style="min-width:20px;">0</span>
+        </div>
+
+        <div class="row">
+            <span style="color:#aaa; font-size:15px; min-width:44px;">Ponteiros</span>
+            <label style="min-width:18px; font-size:14px; color:#999;">%</label>
+            <button class="btn small" data-ptr="-5">−</button>
+            <span class="val" id="ptrV" style="min-width:34px;">100</span>
+            <button class="btn small" data-ptr="+5">+</button>
+            <button class="btn reset" id="resetPtr" style="font-size:12px; padding:2px 8px;">↺</button>
+        </div>
+
+        <div class="row">
+            <span style="color:#aaa; font-size:15px; min-width:44px;">Esticar</span>
+            <label style="min-width:18px; font-size:14px; color:#999;">L</label>
+            <button class="btn small" data-stretch="w-">−</button>
+            <span class="val" id="stretchW" style="min-width:30px;">100</span>
+            <button class="btn small" data-stretch="w+">+</button>
+            <label style="min-width:18px; font-size:14px; color:#999; margin-left:4px;">A</label>
+            <button class="btn small" data-stretch="h-">−</button>
+            <span class="val" id="stretchH" style="min-width:30px;">100</span>
+            <button class="btn small" data-stretch="h+">+</button>
+            <button class="btn reset" id="resetStretch" style="font-size:12px; padding:2px 8px;">↺</button>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="row" style="justify-content:center;">
+            <button class="btn reset" id="resetViewBtn" style="font-size:15px; padding:4px 16px;">↺ Resetar Visualização</button>
+        </div>
+    </div>
+
+    <div id="toast">✅ Salvo!</div>
+    <div id="debug">💾 <span id="status">carregando...</span></div>
+
+    <script>
+        (function() {
+            const canvas = document.getElementById('c');
+            const ctx = canvas.getContext('2d');
+
+            // ===== ESTADO =====
+            let offsetX = 0, offsetY = 0;
+            let utc = -3.0;
+            let pointerScale = 100;
+            let stretchW = 100, stretchH = 100;
+            let chimeEnabled = false;
+            let chimeSound = null;
+            let chimeIntervalSeconds = 3;
+            let wakeLockEnabled = false; // manual
+            let config = false;
+            let viewConfig = false;
+            let wakeLock = null;
+            let wakeLockCheckInterval = null;
+            let autoWakeLockActive = false; // se ativamos automaticamente
+            const KEY = 'relogio_conf_v53';
+            const KEY_LAST = 'relogio_last_clock';
+            const KEY_CHIME = 'relogio_chime';
+            const KEY_WAKELOCK = 'relogio_wakelock';
+            const KEY_CHIME_INTERVAL = 'relogio_chime_interval';
+            const MAX_BASE64_STORE = 300 * 1024;
+
+            // ===== IMAGEM =====
+            let img = new Image();
+            let loaded = false;
+            let imgData = null;
+            let imgFileSize = null;
+
+            // ===== SOM =====
+            let audioCtx = null;
+            let audioBuffer = null;
+            let lastChimeHour = -1;
+            let chimeCheckInterval = null;
+            let renderInterval = null; // para rodar em background
+
+            // ===== ELEMENTOS DOM =====
+            const btnConfig = document.getElementById('configBtn');
+            const panel = document.getElementById('panel');
+            const closePanel = document.getElementById('closePanel');
+            const dragHandle = document.getElementById('dragHandle');
+            const viewPanel = document.getElementById('viewPanel');
+            const closeViewPanel = document.getElementById('closeViewPanel');
+            const viewDragHandle = document.getElementById('viewDragHandle');
+
+            const xV = document.getElementById('xV');
+            const yV = document.getElementById('yV');
+            const tzV = document.getElementById('tzV');
+            const ptrV = document.getElementById('ptrV');
+            const stretchWEl = document.getElementById('stretchW');
+            const stretchHEl = document.getElementById('stretchH');
+            const resetBtn = document.getElementById('resetBtn');
+            const saveBtn = document.getElementById('saveBtn');
+            const resetPtr = document.getElementById('resetPtr');
+            const resetStretchBtn = document.getElementById('resetStretch');
+            const resetViewBtn = document.getElementById('resetViewBtn');
+            const statusEl = document.getElementById('status');
+            const clearStorageBtn = document.getElementById('clearStorageBtn');
+            const limparTudoBtn = document.getElementById('limparTudoBtn');
+            const fileInput = document.getElementById('fileInput');
+            const selectImgBtn = document.getElementById('selectImgBtn');
+            const imageUrlInput = document.getElementById('imageUrlInput');
+            const applyUrlBtn = document.getElementById('applyUrlBtn');
+            const imgStatus = document.getElementById('imgStatus');
+            const imgSizeEl = document.getElementById('imgSize');
+            const chimeToggle = document.getElementById('chimeToggle');
+            const chimeUrlInput = document.getElementById('chimeUrlInput');
+            const applyChimeBtn = document.getElementById('applyChimeBtn');
+            const selectChimeBtn = document.getElementById('selectChimeBtn');
+            const chimeFileInput = document.getElementById('chimeFileInput');
+            const chimeStatus = document.getElementById('chimeStatus');
+            const testChimeBtn = document.getElementById('testChimeBtn');
+            const wakeLockToggle = document.getElementById('wakeLockToggle');
+            const chimeIntervalDisplay = document.getElementById('chimeIntervalDisplay');
+            const chimeIntervalDec = document.getElementById('chimeIntervalDec');
+            const chimeIntervalInc = document.getElementById('chimeIntervalInc');
+
+            // ===== POSIÇÃO DOS PAINÉIS =====
+            let panelPos = { x: 0, y: 0 };
+            let viewPos = { x: 0, y: 0 };
+            const PANEL_KEY = 'relogio_panel_pos';
+            const VIEW_KEY = 'relogio_view_pos';
+
+            function loadPanelPos() {
+                try {
+                    const saved = localStorage.getItem(PANEL_KEY);
+                    if (saved) {
+                        const pos = JSON.parse(saved);
+                        panelPos.x = pos.x ?? 0;
+                        panelPos.y = pos.y ?? 0;
+                    } else {
+                        panelPos.x = (window.innerWidth - 280) / 2;
+                        panelPos.y = window.innerHeight - 300;
+                    }
+                } catch(e) { 
+                    panelPos.x = (window.innerWidth - 280) / 2;
+                    panelPos.y = window.innerHeight - 300;
+                }
+                applyPanelPos();
+            }
+
+            function savePanelPos() {
+                try {
+                    localStorage.setItem(PANEL_KEY, JSON.stringify(panelPos));
+                } catch(e) {}
+            }
+
+            function applyPanelPos() {
+                panel.style.left = panelPos.x + 'px';
+                panel.style.top = panelPos.y + 'px';
+            }
+
+            function loadViewPos() {
+                try {
+                    const saved = localStorage.getItem(VIEW_KEY);
+                    if (saved) {
+                        const pos = JSON.parse(saved);
+                        viewPos.x = pos.x ?? 0;
+                        viewPos.y = pos.y ?? 0;
+                    } else {
+                        viewPos.x = (window.innerWidth - 368) / 2;
+                        viewPos.y = window.innerHeight - 420;
+                    }
+                } catch(e) { 
+                    viewPos.x = (window.innerWidth - 368) / 2;
+                    viewPos.y = window.innerHeight - 420;
+                }
+                applyViewPos();
+            }
+
+            function saveViewPos() {
+                try {
+                    localStorage.setItem(VIEW_KEY, JSON.stringify(viewPos));
+                } catch(e) {}
+            }
+
+            function applyViewPos() {
+                viewPanel.style.left = viewPos.x + 'px';
+                viewPanel.style.top = viewPos.y + 'px';
+            }
+
+            // ===== ARRASTAR =====
+            function setupDrag(handle, panelEl, posObj, applyFn, saveFn) {
+                let isDragging = false;
+                let dragStartX = 0, dragStartY = 0;
+                let startX = 0, startY = 0;
+
+                function start(e) {
+                    if (e.target.closest('.close')) return;
+                    isDragging = true;
+                    const touch = e.touches ? e.touches[0] : e;
+                    dragStartX = touch.clientX;
+                    dragStartY = touch.clientY;
+                    startX = posObj.x;
+                    startY = posObj.y;
+                    panelEl.style.cursor = 'grabbing';
+                    e.preventDefault();
+                }
+
+                function move(e) {
+                    if (!isDragging) return;
+                    const touch = e.touches ? e.touches[0] : e;
+                    const dx = touch.clientX - dragStartX;
+                    const dy = touch.clientY - dragStartY;
+                    posObj.x = startX + dx;
+                    posObj.y = startY + dy;
+                    posObj.x = Math.max(0, Math.min(window.innerWidth - panelEl.offsetWidth, posObj.x));
+                    posObj.y = Math.max(0, Math.min(window.innerHeight - panelEl.offsetHeight, posObj.y));
+                    applyFn();
+                    e.preventDefault();
+                }
+
+                function end() {
+                    if (isDragging) {
+                        isDragging = false;
+                        panelEl.style.cursor = 'grab';
+                        saveFn();
+                    }
+                }
+
+                handle.addEventListener('mousedown', start);
+                document.addEventListener('mousemove', move);
+                document.addEventListener('mouseup', end);
+                handle.addEventListener('touchstart', start, { passive: false });
+                document.addEventListener('touchmove', move, { passive: false });
+                document.addEventListener('touchend', end, { passive: false });
+            }
+
+            setupDrag(dragHandle, panel, panelPos, applyPanelPos, savePanelPos);
+            setupDrag(viewDragHandle, viewPanel, viewPos, applyViewPos, saveViewPos);
+
+            // ===== FUNÇÕES =====
+            function showImgSize(bytes) {
+                if (bytes === null || bytes === undefined) {
+                    imgSizeEl.textContent = '';
+                    return;
+                }
+                if (bytes < 1024) imgSizeEl.textContent = bytes + ' B';
+                else if (bytes < 1024 * 1024) imgSizeEl.textContent = (bytes / 1024).toFixed(1) + ' KB';
+                else imgSizeEl.textContent = (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+            }
+
+            // ===== SOM =====
+            function loadChimeSound(src) {
+                if (!src) {
+                    chimeSound = null;
+                    audioBuffer = null;
+                    chimeStatus.textContent = 'Nenhum som selecionado';
+                    return;
+                }
+                chimeSound = src;
+                chimeStatus.textContent = '📢 ' + (src.length > 40 ? src.substring(0,40)+'...' : src);
+                if (src.startsWith('data:audio') || src.startsWith('http')) {
+                    fetch(src)
+                        .then(response => response.arrayBuffer())
+                        .then(arrayBuffer => {
+                            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                            return audioCtx.decodeAudioData(arrayBuffer);
+                        })
+                        .then(buffer => {
+                            audioBuffer = buffer;
+                            console.log('🔊 Som de badalada carregado');
+                            chimeStatus.textContent = '📢 ' + (src.length > 40 ? src.substring(0,40)+'...' : src) + ' ✅';
+                        })
+                        .catch(err => {
+                            console.warn('Erro ao carregar som:', err);
+                            chimeStatus.textContent = '⚠️ Erro ao carregar som';
+                            audioBuffer = null;
+                        });
+                } else {
+                    audioBuffer = null;
+                    chimeStatus.textContent = '⚠️ Formato não suportado';
+                }
+                saveAllSettings();
+            }
+
+            // ===== PLAY CHIME =====
+            function playChime(count) {
+                if (!audioBuffer) {
+                    console.warn('Áudio não carregado');
+                    showToast('⚠️ Som não carregado', '#ffaa44');
+                    return;
+                }
+                try {
+                    if (!audioCtx) {
+                        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    if (audioCtx.state === 'suspended') {
+                        audioCtx.resume().catch(e => console.warn('Erro ao resumir AudioContext:', e));
+                    }
+
+                    let played = 0;
+                    const intervalMs = Math.max(100, chimeIntervalSeconds * 1000);
+
+                    function playNext() {
+                        if (played >= count) {
+                            // Após a última badalada, desligar a tela se foi ligada automaticamente
+                            setTimeout(() => {
+                                if (autoWakeLockActive && !wakeLockEnabled) {
+                                    releaseWakeLockAuto();
+                                }
+                            }, 2000);
+                            return;
+                        }
+                        const source = audioCtx.createBufferSource();
+                        source.buffer = audioBuffer;
+                        source.connect(audioCtx.destination);
+                        source.start();
+                        played++;
+                        if (played < count) {
+                            setTimeout(playNext, intervalMs);
+                        } else {
+                            setTimeout(() => {
+                                if (autoWakeLockActive && !wakeLockEnabled) {
+                                    releaseWakeLockAuto();
+                                }
+                            }, 2000);
+                        }
+                    }
+                    playNext();
+                    console.log(`🔔 Tocando ${count} badaladas (hora ${new Date().getHours()})`);
+                } catch(e) {
+                    console.warn('Erro ao reproduzir som:', e);
+                }
+            }
+
+            function testChimeSound() {
+                if (!audioBuffer) {
+                    showToast('⚠️ Carregue um som primeiro', '#ffaa44');
+                    return;
+                }
+                playChime(1);
+                showToast('🔊 Testando som', '#8f8');
+            }
+
+            // ===== VERIFICAÇÃO DE BADALADA E WAKE LOCK AUTOMÁTICO =====
+            function startChimeCheck() {
+                if (chimeCheckInterval) clearInterval(chimeCheckInterval);
+                chimeCheckInterval = setInterval(() => {
+                    const now = new Date();
+                    const hour = now.getHours();
+                    const minute = now.getMinutes();
+                    const second = now.getSeconds();
+
+                    // Verifica se é hora cheia (minuto = 0, segundo = 0)
+                    if (chimeEnabled && minute === 0 && second === 0 && hour !== lastChimeHour) {
+                        lastChimeHour = hour;
+                        const chimeCount = hour % 12 === 0 ? 12 : hour % 12;
+                        console.log(`🔔 Badaladas: ${chimeCount} (hora ${hour})`);
+                        // Ativar wake lock automaticamente se não estiver ativo manualmente
+                        if (!wakeLockEnabled && !autoWakeLockActive) {
+                            requestWakeLockAuto();
+                        }
+                        playChime(chimeCount);
+                        showToast(`🔔 ${chimeCount} badaladas`, '#ffcc88');
+                    }
+
+                    // Verifica se está a 1 minuto da hora cheia (minuto = 59, segundo = 0)
+                    if (chimeEnabled && minute === 59 && second === 0) {
+                        const nextHour = (hour + 1) % 24;
+                        // Ativar wake lock automaticamente se não estiver ativo manualmente
+                        if (!wakeLockEnabled && !autoWakeLockActive) {
+                            requestWakeLockAuto();
+                            console.log(`💡 Ativando wake lock automático para as ${nextHour}h (1min antes)`);
+                        }
+                    }
+
+                    // Manter AudioContext ativo
+                    if (audioCtx && audioCtx.state === 'suspended') {
+                        audioCtx.resume().catch(e => {});
+                    }
+                }, 100);
+                console.log('⏰ Verificação de badaladas e wake lock automático iniciada (100ms)');
+            }
+
+            function stopChimeCheck() {
+                if (chimeCheckInterval) {
+                    clearInterval(chimeCheckInterval);
+                    chimeCheckInterval = null;
+                    console.log('⏰ Verificação parada');
+                }
+            }
+
+            // ===== WAKE LOCK (MANUAL E AUTOMÁTICO) =====
+            async function requestWakeLock() {
+                try {
+                    if ('wakeLock' in navigator) {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        wakeLockEnabled = true;
+                        updateWakeLockUI();
+                        console.log('💡 WakeLock ativado (manual)');
+                        showToast('💡 Tela mantida ligada', '#8f8');
+                        startWakeLockCheck();
+                        document.addEventListener('visibilitychange', () => {
+                            if (document.visibilityState === 'visible' && wakeLockEnabled && !wakeLock) {
+                                requestWakeLock();
+                            }
+                        });
+                        return true;
+                    } else {
+                        showToast('⚠️ WakeLock não suportado', '#ffaa44');
+                        wakeLockEnabled = false;
+                        updateWakeLockUI();
+                        return false;
+                    }
+                } catch(e) {
+                    console.warn('Erro ao solicitar WakeLock:', e);
+                    showToast('⚠️ Não foi possível ativar WakeLock', '#ffaa44');
+                    wakeLockEnabled = false;
+                    updateWakeLockUI();
+                    return false;
+                }
+            }
+
+            async function requestWakeLockAuto() {
+                if (wakeLock) return; // já ativo
+                try {
+                    if ('wakeLock' in navigator) {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        autoWakeLockActive = true;
+                        console.log('💡 WakeLock ativado automaticamente');
+                        startWakeLockCheck();
+                        document.addEventListener('visibilitychange', () => {
+                            if (document.visibilityState === 'visible' && (wakeLockEnabled || autoWakeLockActive) && !wakeLock) {
+                                if (wakeLockEnabled) requestWakeLock();
+                                else if (autoWakeLockActive) requestWakeLockAuto();
+                            }
+                        });
+                        return true;
+                    }
+                } catch(e) {
+                    console.warn('Erro ao ativar WakeLock automático:', e);
+                    return false;
+                }
+            }
+
+            async function releaseWakeLock() {
+                if (wakeLock) {
+                    try {
+                        await wakeLock.release();
+                        wakeLock = null;
+                        console.log('💡 WakeLock liberado (manual)');
+                    } catch(e) {
+                        console.warn('Erro ao liberar WakeLock:', e);
+                    }
+                }
+                wakeLockEnabled = false;
+                autoWakeLockActive = false;
+                updateWakeLockUI();
+                stopWakeLockCheck();
+                showToast('💡 Tela não será mais mantida ligada', '#f88');
+            }
+
+            async function releaseWakeLockAuto() {
+                if (wakeLock && !wakeLockEnabled) {
+                    try {
+                        await wakeLock.release();
+                        wakeLock = null;
+                        autoWakeLockActive = false;
+                        console.log('💡 WakeLock automático liberado');
+                        stopWakeLockCheck();
+                    } catch(e) {
+                        console.warn('Erro ao liberar WakeLock automático:', e);
+                    }
+                } else {
+                    autoWakeLockActive = false;
+                }
+            }
+
+            function startWakeLockCheck() {
+                if (wakeLockCheckInterval) clearInterval(wakeLockCheckInterval);
+                wakeLockCheckInterval = setInterval(() => {
+                    if ((wakeLockEnabled || autoWakeLockActive) && !wakeLock) {
+                        console.warn('⚠️ WakeLock perdido, tentando reativar...');
+                        if (wakeLockEnabled) requestWakeLock();
+                        else if (autoWakeLockActive) requestWakeLockAuto();
+                    }
+                }, 5000);
+            }
+
+            function stopWakeLockCheck() {
+                if (wakeLockCheckInterval) {
+                    clearInterval(wakeLockCheckInterval);
+                    wakeLockCheckInterval = null;
+                }
+            }
+
+            function toggleWakeLock() {
+                if (wakeLockEnabled) {
+                    releaseWakeLock().then(() => {
+                        saveWakeLockState();
+                    });
+                } else {
+                    if (autoWakeLockActive) {
+                        releaseWakeLockAuto();
+                    }
+                    requestWakeLock().then(success => {
+                        if (success) {
+                            saveWakeLockState();
+                        } else {
+                            saveWakeLockState();
+                        }
+                    });
+                }
+            }
+
+            function loadWakeLockState() {
+                try {
+                    const val = localStorage.getItem(KEY_WAKELOCK);
+                    if (val !== null) {
+                        wakeLockEnabled = val === 'true';
+                    } else {
+                        wakeLockEnabled = false;
+                    }
+                } catch(e) { wakeLockEnabled = false; }
+                updateWakeLockUI();
+                if (wakeLockEnabled) {
+                    requestWakeLock();
+                }
+            }
+
+            function saveWakeLockState() {
+                try {
+                    localStorage.setItem(KEY_WAKELOCK, String(wakeLockEnabled));
+                } catch(e) {}
+            }
+
+            function updateWakeLockUI() {
+                if (wakeLockEnabled && wakeLock) {
+                    wakeLockToggle.textContent = 'Desativar';
+                    wakeLockToggle.className = 'btn toggle-on';
+                } else {
+                    wakeLockToggle.textContent = 'Ativar';
+                    wakeLockToggle.className = 'btn toggle-off';
+                }
+            }
+
+            wakeLockToggle.addEventListener('click', toggleWakeLock);
+
+            // ===== SALVAR CONFIGURAÇÕES =====
+            function saveAllSettings() {
+                try {
+                    let imgToSave = imgData || '';
+                    if (imgToSave && imgToSave.startsWith('data:image') && imgToSave.length > MAX_BASE64_STORE) {
+                        showToast('⚠️ Imagem base64 muito grande, não será salva', '#ffaa44');
+                        imgToSave = '';
+                        imgStatus.textContent = '⚠️ Imagem não salva (muito grande)';
+                    }
+                    const d = { 
+                        ox: offsetX, oy: offsetY, utc: utc,
+                        ptr: pointerScale, sw: stretchW, sh: stretchH,
+                        img: imgToSave,
+                        chimeSound: chimeSound || '',
+                        chimeInterval: chimeIntervalSeconds
+                    };
+                    localStorage.setItem(KEY, JSON.stringify(d));
+                    statusEl.textContent = 'OK (salvo)';
+                    console.log('✅ Salvo:', d);
+                    showToast('✅ Salvo!', '#8f8');
+                    saveLastClock();
+                } catch(e) {
+                    if (e.name === 'QuotaExceededError' || e.code === 22) {
+                        statusEl.textContent = '⚠️ localStorage cheio';
+                        showToast('⚠️ Armazenamento cheio!', '#ffaa44');
+                    } else {
+                        statusEl.textContent = 'erro ao salvar';
+                        console.error('❌ Erro ao salvar:', e);
+                        showToast('❌ Erro ao salvar: ' + e.message, '#ff6666');
+                    }
+                }
+            }
+
+            function saveLastClock() {
+                try {
+                    if (!imgData) return;
+                    const last = {
+                        img: imgData,
+                        ox: offsetX, oy: offsetY, utc: utc,
+                        ptr: pointerScale, sw: stretchW, sh: stretchH,
+                        chimeSound: chimeSound || '',
+                        chimeInterval: chimeIntervalSeconds
+                    };
+                    if (last.img && last.img.startsWith('data:image') && last.img.length > MAX_BASE64_STORE) {
+                        console.warn('Imagem base64 grande, não salva como último');
+                        return;
+                    }
+                    localStorage.setItem(KEY_LAST, JSON.stringify(last));
+                    console.log('💾 Último relógio salvo:', last);
+                } catch(e) { console.warn('Erro ao salvar último:', e); }
+            }
+
+            // ===== CARREGAR CONFIGURAÇÕES =====
+            function loadAllSettings() {
+                try {
+                    const raw = localStorage.getItem(KEY);
+                    if (raw) {
+                        const d = JSON.parse(raw);
+                        offsetX = d.ox ?? 0;
+                        offsetY = d.oy ?? 0;
+                        utc = d.utc ?? -3.0;
+                        pointerScale = d.ptr ?? 100;
+                        stretchW = d.sw ?? 100;
+                        stretchH = d.sh ?? 100;
+                        if (d.img) {
+                            imgData = d.img;
+                        }
+                        if (d.chimeSound) {
+                            loadChimeSound(d.chimeSound);
+                        }
+                        if (d.chimeInterval) {
+                            chimeIntervalSeconds = Math.max(1, Math.min(60, d.chimeInterval));
+                            updateChimeIntervalUI();
+                        }
+                        statusEl.textContent = 'OK (carregado)';
+                        console.log('✅ Carregado:', d);
+                        updateDisplay();
+                        return;
+                    }
+                } catch(e) {
+                    statusEl.textContent = 'erro ao carregar';
+                    console.error('❌ Erro ao carregar:', e);
+                }
+
+                try {
+                    const raw = localStorage.getItem(KEY_LAST);
+                    if (raw) {
+                        const last = JSON.parse(raw);
+                        if (last && last.img) {
+                            offsetX = last.ox ?? 0;
+                            offsetY = last.oy ?? 0;
+                            utc = last.utc ?? -3.0;
+                            pointerScale = last.ptr ?? 100;
+                            stretchW = last.sw ?? 100;
+                            stretchH = last.sh ?? 100;
+                            imgData = last.img;
+                            if (last.chimeSound) {
+                                loadChimeSound(last.chimeSound);
+                            }
+                            if (last.chimeInterval) {
+                                chimeIntervalSeconds = Math.max(1, Math.min(60, last.chimeInterval));
+                                updateChimeIntervalUI();
+                            }
+                            statusEl.textContent = '✅ (último)';
+                            console.log('🔄 Último relógio carregado:', last);
+                            updateDisplay();
+                            return;
+                        }
+                    }
+                } catch(e) { console.warn('Erro ao carregar último:', e); }
+
+                statusEl.textContent = 'vazio (padrão)';
+                console.log('ℹ️ Nenhuma configuração salva.');
+                if (!imgData) {
+                    imgData = '1000213651.jpg';
+                }
+                updateDisplay();
+            }
+
+            // ===== LOAD IMAGE =====
+            function loadImage(src) {
+                if (!src) return;
+                img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.src = src;
+                img.onload = () => {
+                    loaded = true;
+                    imgStatus.textContent = '✅ ' + (src.length > 50 ? src.substring(0,50)+'...' : src);
+                    console.log('🖼️ Imagem carregada:', src);
+                    if (!src.startsWith('data:image')) {
+                        fetch(src, { method: 'HEAD' })
+                            .then(res => {
+                                const cl = res.headers.get('content-length');
+                                if (cl) {
+                                    imgFileSize = parseInt(cl, 10);
+                                    showImgSize(imgFileSize);
+                                } else {
+                                    imgFileSize = null;
+                                    showImgSize(null);
+                                }
+                            })
+                            .catch(() => { imgFileSize = null; showImgSize(null); });
+                    } else {
+                        const b64 = src.split(',')[1] || '';
+                        const size = Math.round((b64.length * 3) / 4);
+                        imgFileSize = size;
+                        showImgSize(size);
+                    }
+                    renderClock();
+                    saveLastClock();
+                };
+                img.onerror = () => {
+                    loaded = false;
+                    imgStatus.textContent = '❌ Falha ao carregar';
+                    console.error('❌ Erro ao carregar imagem:', src);
+                    renderClock();
+                };
+            }
+
+            function updateDisplay() {
+                xV.textContent = offsetX;
+                yV.textContent = offsetY;
+                tzV.textContent = utc.toFixed(1);
+                ptrV.textContent = pointerScale;
+                stretchWEl.textContent = stretchW;
+                stretchHEl.textContent = stretchH;
+                if (imgData) {
+                    imageUrlInput.value = (imgData.length > 80) ? 'Arquivo selecionado' : imgData;
+                }
+                if (chimeSound) {
+                    chimeUrlInput.value = chimeSound;
+                }
+                updateChimeIntervalUI();
+                updateWakeLockUI();
+            }
+
+            function showToast(msg, color) {
+                const t = document.getElementById('toast');
+                t.innerHTML = msg;
+                t.style.borderColor = color || '#8f8';
+                t.className = 'show';
+                if (color === '#ff6666' || color === '#ffaa44') t.classList.add('error');
+                else t.classList.remove('error');
+                clearTimeout(window.toastTimeout);
+                window.toastTimeout = setTimeout(() => t.classList.remove('show'), 2500);
+            }
+
+            function resizeCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                if (panel.classList.contains('visible')) {
+                    const rect = panel.getBoundingClientRect();
+                    if (rect.right > window.innerWidth) panelPos.x = window.innerWidth - rect.width - 10;
+                    if (rect.bottom > window.innerHeight) panelPos.y = window.innerHeight - rect.height - 10;
+                    if (rect.left < 0) panelPos.x = 10;
+                    if (rect.top < 0) panelPos.y = 10;
+                    applyPanelPos();
+                    savePanelPos();
+                }
+                if (viewPanel.classList.contains('visible')) {
+                    const rect = viewPanel.getBoundingClientRect();
+                    if (rect.right > window.innerWidth) viewPos.x = window.innerWidth - rect.width - 10;
+                    if (rect.bottom > window.innerHeight) viewPos.y = window.innerHeight - rect.height - 10;
+                    if (rect.left < 0) viewPos.x = 10;
+                    if (rect.top < 0) viewPos.y = 10;
+                    applyViewPos();
+                    saveViewPos();
+                }
+                renderClock();
+            }
+
+            window.addEventListener('resize', resizeCanvas);
+
+            // ===== DESENHO DOS PONTEIROS =====
+            function drawHand(cx, cy, ang, len, w, color) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(ang);
+                ctx.shadowColor = 'rgba(0,0,0,0.6)';
+                ctx.shadowBlur = 10;
+
+                const base = 8;
+                const tip = 2;
+                const midLen = len * 0.7;
+
+                ctx.beginPath();
+                ctx.moveTo(0, base);
+                ctx.bezierCurveTo(w * 0.6, -midLen * 0.2, w * 0.3, -midLen, tip, -len);
+                ctx.lineTo(-tip, -len);
+                ctx.bezierCurveTo(-w * 0.3, -midLen, -w * 0.6, -midLen * 0.2, 0, base);
+                ctx.closePath();
+                ctx.fillStyle = color;
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+                ctx.beginPath();
+                ctx.moveTo(0, base - 4);
+                ctx.lineTo(0, -len + 6);
+                ctx.strokeStyle = 'rgba(180,160,120,0.2)';
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(0, base * 0.6, w * 0.3, 0, 2 * Math.PI);
+                ctx.fillStyle = 'rgba(200,180,140,0.3)';
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            function drawSecondHand(cx, cy, ang, len) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(ang);
+                ctx.shadowColor = 'rgba(0,0,0,0.6)';
+                ctx.shadowBlur = 6;
+
+                const tip = 1.5;
+                const base = 4;
+                const midLen = len * 0.6;
+
+                ctx.beginPath();
+                ctx.moveTo(0, base);
+                ctx.bezierCurveTo(2, -midLen * 0.3, 1.0, -midLen, tip, -len);
+                ctx.lineTo(-tip, -len);
+                ctx.bezierCurveTo(-1.0, -midLen, -2, -midLen * 0.3, 0, base);
+                ctx.closePath();
+                ctx.fillStyle = '#b52a1a';
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+                ctx.beginPath();
+                ctx.arc(0, 14, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = '#b52a1a';
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(0, 14, 4, 0, 2 * Math.PI);
+                ctx.fillStyle = '#d44a2a';
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(0, 14, 2, 0, 2 * Math.PI);
+                ctx.fillStyle = '#ffcc88';
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            // ===== RENDERIZAÇÃO DO RELÓGIO =====
+            let hours = 0, minutes = 0, seconds = 0;
+
+            function updateTime() {
+                const now = new Date();
+                const ms = utc * 3600 * 1000;
+                const d = new Date(now.getTime() + ms);
+                hours = d.getHours();
+                minutes = d.getMinutes();
+                seconds = d.getSeconds();
+            }
+
+            function renderClock() {
+                const w = canvas.width, h = canvas.height;
+                ctx.clearRect(0, 0, w, h);
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, w, h);
+
+                if (loaded && img.complete && img.naturalWidth > 0) {
+                    const iw = img.naturalWidth, ih = img.naturalHeight;
+                    const stretchX = stretchW / 100;
+                    const stretchY = stretchH / 100;
+                    let scale = Math.max(w / iw, h / ih);
+                    let dw = iw * scale * stretchX;
+                    let dh = ih * scale * stretchY;
+                    const dx = (w - dw) / 2;
+                    const dy = (h - dh) / 2;
+                    ctx.drawImage(img, dx, dy, dw, dh);
+                }
+
+                updateTime();
+
+                const cx = w/2 + offsetX;
+                const cy = h/2 + offsetY;
+                const r = Math.min(w, h) * 0.4;
+                const ptrFactor = pointerScale / 100;
+
+                const hourDeg = (hours % 12) * 30 + minutes * 0.5 + seconds * (0.5 / 60);
+                const minuteDeg = minutes * 6 + seconds * 0.1;
+                const secondDeg = seconds * 6;
+
+                const ha = (hourDeg - 90) * Math.PI / 180;
+                const ma = (minuteDeg - 90) * Math.PI / 180;
+                const sa = (secondDeg - 90) * Math.PI / 180;
+
+                const lenHour = r * 0.45 * ptrFactor;
+                const lenMinute = r * 0.62 * ptrFactor;
+                const lenSecond = r * 0.67 * ptrFactor;
+
+                drawHand(cx, cy, ha, lenHour, 8, '#1a1410');
+                drawHand(cx, cy, ma, lenMinute, 6, '#1a1410');
+                drawSecondHand(cx, cy, sa, lenSecond);
+
+                ctx.shadowBlur = 8;
+                ctx.beginPath();
+                ctx.arc(cx, cy, 12, 0, 2 * Math.PI);
+                ctx.fillStyle = '#c8a86a';
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.beginPath();
+                ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = '#e8d088';
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(cx, cy, 2, 0, 2 * Math.PI);
+                ctx.fillStyle = '#806030';
+                ctx.fill();
+
+                if (viewConfig) {
+                    const gr = Math.min(w, h) * 0.28;
+                    ctx.save();
+                    ctx.shadowBlur = 0;
+                    ctx.strokeStyle = '#ff3366';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([8, 8]);
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, gr, 0, 2 * Math.PI);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.strokeStyle = '#00ccff';
+                    ctx.lineWidth = 2;
+                    const hl = Math.min(w, h) * 0.38;
+                    ctx.beginPath();
+                    ctx.moveTo(cx - hl, cy);
+                    ctx.lineTo(cx + hl, cy);
+                    ctx.moveTo(cx, cy - hl);
+                    ctx.lineTo(cx, cy + hl);
+                    ctx.stroke();
+                    ctx.fillStyle = '#ffaa00';
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 4, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                    ctx.fillRect(cx + 14, cy - 22, 130, 22);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '13px sans-serif';
+                    ctx.fillText('Centro: ' + Math.round(cx) + ', ' + Math.round(cy), cx + 18, cy - 5);
+                    ctx.restore();
+                }
+            }
+
+            // ===== ALTERNÂNCIA DOS PAINÉIS =====
+            let currentMode = 0;
+
+            function cycleMode() {
+                if (currentMode === 0) {
+                    currentMode = 1;
+                    panel.classList.add('visible');
+                    viewPanel.classList.remove('visible');
+                    btnConfig.className = 'mode-config';
+                    config = true;
+                    viewConfig = false;
+                    resizeCanvas();
+                } else if (currentMode === 1) {
+                    currentMode = 2;
+                    panel.classList.remove('visible');
+                    viewPanel.classList.add('visible');
+                    btnConfig.className = 'mode-view';
+                    config = false;
+                    viewConfig = true;
+                    resizeCanvas();
+                } else {
+                    currentMode = 0;
+                    viewPanel.classList.remove('visible');
+                    btnConfig.className = 'mode-none';
+                    viewConfig = false;
+                }
+                renderClock();
+            }
+
+            btnConfig.addEventListener('click', cycleMode);
+
+            closePanel.addEventListener('click', () => {
+                if (currentMode === 1) {
+                    currentMode = 0;
+                    panel.classList.remove('visible');
+                    btnConfig.className = 'mode-none';
+                    config = false;
+                    renderClock();
+                }
+            });
+
+            closeViewPanel.addEventListener('click', () => {
+                if (currentMode === 2) {
+                    currentMode = 0;
+                    viewPanel.classList.remove('visible');
+                    btnConfig.className = 'mode-none';
+                    viewConfig = false;
+                    renderClock();
+                }
+            });
+
+            // ===== AJUSTES =====
+            function adjustOffset(dx, dy) {
+                offsetX += dx; offsetY += dy;
+                updateDisplay();
+                renderClock();
+                saveLastClock();
+            }
+
+            const dirButtons = document.querySelectorAll('.dir-btn');
+            let dirIntervals = {};
+
+            dirButtons.forEach(btn => {
+                const dir = btn.dataset.dir;
+                
+                const startMove = (e) => {
+                    e.preventDefault();
+                    const dx = dir === 'left' ? -1 : dir === 'right' ? 1 : 0;
+                    const dy = dir === 'up' ? -1 : dir === 'down' ? 1 : 0;
+                    adjustOffset(dx, dy);
+                    
+                    if (dirIntervals[dir]) clearInterval(dirIntervals[dir]);
+                    dirIntervals[dir] = setInterval(() => {
+                        adjustOffset(dx, dy);
+                    }, 80);
+                };
+
+                const stopMove = () => {
+                    if (dirIntervals[dir]) {
+                        clearInterval(dirIntervals[dir]);
+                        delete dirIntervals[dir];
+                    }
+                };
+
+                btn.addEventListener('mousedown', startMove);
+                btn.addEventListener('mouseup', stopMove);
+                btn.addEventListener('mouseleave', stopMove);
+                btn.addEventListener('touchstart', startMove, { passive: false });
+                btn.addEventListener('touchend', stopMove);
+                btn.addEventListener('touchcancel', stopMove);
+            });
+
+            function adjustUTC(delta) {
+                utc = Math.round((utc + delta) * 4) / 4;
+                if (utc < -12) utc = -12;
+                if (utc > 14) utc = 14;
+                updateDisplay();
+                renderClock();
+                saveLastClock();
+            }
+
+            function adjustPointer(delta) {
+                pointerScale = Math.max(20, Math.min(200, pointerScale + delta));
+                updateDisplay();
+                renderClock();
+                saveLastClock();
+            }
+
+            function adjustStretch(type, delta) {
+                if (type === 'w') {
+                    stretchW = Math.max(20, Math.min(200, stretchW + delta));
+                } else if (type === 'h') {
+                    stretchH = Math.max(20, Math.min(200, stretchH + delta));
+                }
+                updateDisplay();
+                renderClock();
+                saveLastClock();
+            }
+
+            function resetViewSettings() {
+                offsetX = 0; offsetY = 0;
+                pointerScale = 100;
+                stretchW = 100; stretchH = 100;
+                updateDisplay();
+                renderClock();
+                saveLastClock();
+                showToast('↺ Visualização resetada', '#fc8');
+            }
+
+            document.querySelectorAll('[data-tz]').forEach(b=> {
+                b.addEventListener('click', ()=>{
+                    adjustUTC(parseFloat(b.dataset.tz));
+                });
+            });
+
+            document.querySelectorAll('[data-ptr]').forEach(b=> {
+                b.addEventListener('click', ()=>{
+                    adjustPointer(parseInt(b.dataset.ptr, 10));
+                });
+            });
+
+            document.querySelectorAll('[data-stretch]').forEach(b=> {
+                b.addEventListener('click', ()=>{
+                    const s = b.dataset.stretch;
+                    if (s === 'w+') adjustStretch('w', 5);
+                    else if (s === 'w-') adjustStretch('w', -5);
+                    else if (s === 'h+') adjustStretch('h', 5);
+                    else if (s === 'h-') adjustStretch('h', -5);
+                });
+            });
+
+            resetPtr.addEventListener('click', ()=>{
+                pointerScale = 100;
+                updateDisplay();
+                renderClock();
+                saveLastClock();
+            });
+
+            resetStretchBtn.addEventListener('click', ()=>{
+                stretchW = 100;
+                stretchH = 100;
+                updateDisplay();
+                renderClock();
+                saveLastClock();
+            });
+
+            resetViewBtn.addEventListener('click', resetViewSettings);
+
+            resetBtn.addEventListener('click', ()=>{
+                offsetX = 0; offsetY = 0;
+                utc = -3.0;
+                pointerScale = 100;
+                stretchW = 100;
+                stretchH = 100;
+                chimeSound = null;
+                audioBuffer = null;
+                chimeStatus.textContent = 'Nenhum som selecionado';
+                chimeUrlInput.value = '';
+                chimeIntervalSeconds = 3;
+                updateChimeIntervalUI();
+                saveChimeInterval();
+                updateDisplay();
+                renderClock();
+                saveLastClock();
+                if (autoWakeLockActive) releaseWakeLockAuto();
+            });
+
+            saveBtn.addEventListener('click', saveAllSettings);
+
+            // ===== IMAGEM =====
+            applyUrlBtn.addEventListener('click', ()=>{
+                const url = imageUrlInput.value.trim();
+                if (url) {
+                    imgData = url;
+                    loadImage(url);
+                    updateDisplay();
+                    saveAllSettings();
+                } else {
+                    showToast('⚠️ Digite uma URL', '#ffaa44');
+                }
+            });
+
+            selectImgBtn.addEventListener('click', ()=>{
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', (e)=>{
+                const file = e.target.files[0];
+                if (!file) return;
+                imgFileSize = file.size;
+                showImgSize(file.size);
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const dataUrl = ev.target.result;
+                    imgData = dataUrl;
+                    loadImage(dataUrl);
+                    updateDisplay();
+                    saveAllSettings();
+                    fileInput.value = '';
+                };
+                reader.readAsDataURL(file);
+            });
+
+            // ===== SOM =====
+            applyChimeBtn.addEventListener('click', ()=>{
+                const url = chimeUrlInput.value.trim();
+                if (url) {
+                    loadChimeSound(url);
+                    updateDisplay();
+                    saveAllSettings();
+                    showToast('🔊 Som carregado!', '#8f8');
+                } else {
+                    showToast('⚠️ Digite uma URL', '#ffaa44');
+                }
+            });
+
+            selectChimeBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                document.getElementById('chimeFileInput').click();
+            });
+
+            document.getElementById('chimeFileInput').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    const dataUrl = ev.target.result;
+                    loadChimeSound(dataUrl);
+                    updateDisplay();
+                    saveAllSettings();
+                    showToast('🔊 Som carregado!', '#8f8');
+                    document.getElementById('chimeFileInput').value = '';
+                };
+                reader.readAsDataURL(file);
+            });
+
+            // ===== BADALADAS =====
+            function loadChimeState() {
+                try {
+                    const val = localStorage.getItem(KEY_CHIME);
+                    if (val !== null) {
+                        chimeEnabled = val === 'true';
+                    } else {
+                        chimeEnabled = false;
+                    }
+                } catch(e) { chimeEnabled = false; }
+                updateChimeUI();
+                if (chimeEnabled) {
+                    startChimeCheck();
+                }
+            }
+
+            function saveChimeState() {
+                try {
+                    localStorage.setItem(KEY_CHIME, String(chimeEnabled));
+                } catch(e) {}
+            }
+
+            function updateChimeUI() {
+                if (chimeEnabled) {
+                    chimeToggle.textContent = 'Desligar';
+                    chimeToggle.className = 'btn toggle-on';
+                } else {
+                    chimeToggle.textContent = 'Ligar';
+                    chimeToggle.className = 'btn toggle-off';
+                }
+            }
+
+            function toggleChime() {
+                chimeEnabled = !chimeEnabled;
+                saveChimeState();
+                updateChimeUI();
+                if (chimeEnabled) {
+                    lastChimeHour = -1;
+                    startChimeCheck();
+                    showToast('🔔 Badaladas ativadas (na hora cheia)', '#8f8');
+                } else {
+                    stopChimeCheck();
+                    showToast('🔕 Badaladas desativadas', '#f88');
+                }
+            }
+
+            chimeToggle.addEventListener('click', toggleChime);
+            testChimeBtn.addEventListener('click', testChimeSound);
+
+            // ===== INTERVALO ENTRE BADALADAS =====
+            function loadChimeInterval() {
+                try {
+                    const val = localStorage.getItem(KEY_CHIME_INTERVAL);
+                    if (val !== null) {
+                        chimeIntervalSeconds = parseInt(val, 10);
+                        if (isNaN(chimeIntervalSeconds) || chimeIntervalSeconds < 1) chimeIntervalSeconds = 1;
+                        if (chimeIntervalSeconds > 60) chimeIntervalSeconds = 60;
+                    } else {
+                        chimeIntervalSeconds = 3;
+                    }
+                } catch(e) { chimeIntervalSeconds = 3; }
+                updateChimeIntervalUI();
+            }
+
+            function saveChimeInterval() {
+                try {
+                    localStorage.setItem(KEY_CHIME_INTERVAL, String(chimeIntervalSeconds));
+                } catch(e) {}
+            }
+
+            function updateChimeIntervalUI() {
+                chimeIntervalDisplay.textContent = chimeIntervalSeconds;
+            }
+
+            function adjustChimeInterval(delta) {
+                chimeIntervalSeconds = Math.max(1, Math.min(60, chimeIntervalSeconds + delta));
+                updateChimeIntervalUI();
+                saveChimeInterval();
+            }
+
+            chimeIntervalDec.addEventListener('click', () => adjustChimeInterval(-1));
+            chimeIntervalInc.addEventListener('click', () => adjustChimeInterval(1));
+
+            // ===== LIMPEZA =====
+            function clearClockData() {
+                try {
+                    localStorage.removeItem(KEY);
+                    localStorage.removeItem(KEY_LAST);
+                    localStorage.removeItem(KEY_CHIME);
+                    localStorage.removeItem(KEY_WAKELOCK);
+                    localStorage.removeItem(KEY_CHIME_INTERVAL);
+                    statusEl.textContent = 'limpo';
+                    showToast('🗑️ Dados do relógio removidos!', '#ffaa44');
+                    offsetX = 0; offsetY = 0;
+                    utc = -3.0;
+                    pointerScale = 100;
+                    stretchW = 100;
+                    stretchH = 100;
+                    imgData = null;
+                    loaded = false;
+                    imgFileSize = null;
+                    chimeSound = null;
+                    audioBuffer = null;
+                    showImgSize(null);
+                    chimeStatus.textContent = 'Nenhum som selecionado';
+                    chimeIntervalSeconds = 3;
+                    updateChimeIntervalUI();
+                    chimeEnabled = false;
+                    saveChimeState();
+                    updateChimeUI();
+                    stopChimeCheck();
+                    if (wakeLockEnabled) releaseWakeLock();
+                    wakeLockEnabled = false;
+                    saveWakeLockState();
+                    updateWakeLockUI();
+                    if (autoWakeLockActive) releaseWakeLockAuto();
+                    updateDisplay();
+                    renderClock();
+                } catch(e) { console.error('Erro ao limpar:', e); }
+            }
+
+            function clearAllStorage() {
+                if (confirm('⚠️ Apagar TODOS os dados deste site?')) {
+                    try {
+                        localStorage.clear();
+                        statusEl.textContent = 'limpo (tudo)';
+                        showToast('🗑️ Armazenamento limpo!', '#ffaa44');
+                        offsetX = 0; offsetY = 0;
+                        utc = -3.0;
+                        pointerScale = 100;
+                        stretchW = 100;
+                        stretchH = 100;
+                        imgData = null;
+                        loaded = false;
+                        imgFileSize = null;
+                        chimeSound = null;
+                        audioBuffer = null;
+                        showImgSize(null);
+                        chimeStatus.textContent = 'Nenhum som selecionado';
+                        chimeIntervalSeconds = 3;
+                        updateChimeIntervalUI();
+                        chimeEnabled = false;
+                        saveChimeState();
+                        updateChimeUI();
+                        stopChimeCheck();
+                        if (wakeLockEnabled) releaseWakeLock();
+                        wakeLockEnabled = false;
+                        saveWakeLockState();
+                        updateWakeLockUI();
+                        if (autoWakeLockActive) releaseWakeLockAuto();
+                        updateDisplay();
+                        renderClock();
+                    } catch(e) { console.error('Erro ao limpar tudo:', e); }
+                }
+            }
+
+            clearStorageBtn.addEventListener('click', clearClockData);
+            limparTudoBtn.addEventListener('click', clearAllStorage);
+
+            // ===== INICIALIZAÇÃO =====
+            loadPanelPos();
+            loadViewPos();
+            loadChimeState();
+            loadWakeLockState();
+            loadChimeInterval();
+            loadAllSettings();
+            
+            if (imgData) {
+                loadImage(imgData);
+            } else {
+                imgData = '1000213651.jpg';
+                loadImage(imgData);
+            }
+            
+            // Inicia o loop de renderização em background (atualiza a cada segundo)
+            if (renderInterval) clearInterval(renderInterval);
+            renderInterval = setInterval(() => {
+                renderClock();
+            }, 1000);
+            
+            renderClock();
+
+            // Loop contínuo para manter a UI responsiva (usando requestAnimationFrame)
+            function loop() {
+                renderClock();
+                requestAnimationFrame(loop);
+            }
+            loop();
+
+            window.addEventListener('beforeunload', () => {
+                saveLastClock();
+                stopChimeCheck();
+                if (wakeLockEnabled) releaseWakeLock();
+                if (autoWakeLockActive) releaseWakeLockAuto();
+                stopWakeLockCheck();
+                if (renderInterval) clearInterval(renderInterval);
+            });
+
+        })();
+    </script>
+</body>
+</html>
