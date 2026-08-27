@@ -10,7 +10,6 @@
     <link rel="manifest" href="manifest.json">
     <title>Relógio</title>
     <style>
-        /* ===== SEU CSS AQUI (mantido integralmente) ===== */
         * { margin:0; padding:0; box-sizing:border-box; }
         html, body { width:100%; height:100%; overflow:hidden; background:#000; }
         canvas { display:block; width:100vw; height:100vh; background:#000; }
@@ -270,6 +269,9 @@
             const canvas = document.getElementById('c');
             const ctx = canvas.getContext('2d');
 
+            // ===== URL DO SOM (CAMINHO ABSOLUTO) =====
+            const DEFAULT_CHIME_URL = 'https://tvluizcafofo-a11y.github.io/relogio/chime.mp3';
+
             // ===== ESTADO =====
             let offsetX = 0, offsetY = 0;
             let utc = -3.0;
@@ -278,21 +280,18 @@
             let chimeEnabled = false;
             let chimeSound = null;
             let chimeIntervalSeconds = 3;
-            let wakeLockEnabled = false; // manual
+            let wakeLockEnabled = false;
             let config = false;
             let viewConfig = false;
             let wakeLock = null;
             let wakeLockCheckInterval = null;
-            let autoWakeLockActive = false; // se ativamos automaticamente
+            let autoWakeLockActive = false;
             const KEY = 'relogio_conf_v53';
             const KEY_LAST = 'relogio_last_clock';
             const KEY_CHIME = 'relogio_chime';
             const KEY_WAKELOCK = 'relogio_wakelock';
             const KEY_CHIME_INTERVAL = 'relogio_chime_interval';
             const MAX_BASE64_STORE = 300 * 1024;
-
-            // ===== URL PADRÃO DO SOM (RAIZ DO REPOSITÓRIO) =====
-            const DEFAULT_CHIME_URL = 'chime.mp3'; // Coloque seu arquivo de áudio na raiz com este nome
 
             // ===== IMAGEM =====
             let img = new Image();
@@ -305,7 +304,7 @@
             let audioBuffer = null;
             let lastChimeHour = -1;
             let chimeCheckInterval = null;
-            let renderInterval = null; // para rodar em background
+            let renderInterval = null;
 
             // ===== ELEMENTOS DOM =====
             const btnConfig = document.getElementById('configBtn');
@@ -498,11 +497,9 @@
                             audioBuffer = buffer;
                             console.log('🔊 Som de badalada carregado:', src);
                             chimeStatus.textContent = '✅ ' + (src === DEFAULT_CHIME_URL ? 'Som padrão' : displaySrc) + ' carregado';
-                            // Se for o som padrão e não houver chave salva, salva a URL
                             if (src === DEFAULT_CHIME_URL && !localStorage.getItem(KEY_CHIME_SOUND)) {
                                 localStorage.setItem(KEY_CHIME_SOUND, src);
                             }
-                            // Atualiza o campo de URL
                             chimeUrlInput.value = src;
                         })
                         .catch(err => {
@@ -1352,7 +1349,6 @@
                 renderClock();
                 saveLastClock();
                 if (autoWakeLockActive) releaseWakeLockAuto();
-                // Recarrega o som padrão
                 loadChimeSound(DEFAULT_CHIME_URL);
             });
 
@@ -1543,7 +1539,6 @@
                     if (autoWakeLockActive) releaseWakeLockAuto();
                     updateDisplay();
                     renderClock();
-                    // Recarrega o som padrão
                     loadChimeSound(DEFAULT_CHIME_URL);
                 } catch(e) { console.error('Erro ao limpar:', e); }
             }
@@ -1602,7 +1597,6 @@
                 loadImage(imgData);
             }
             
-            // Inicia o loop de renderização em background
             if (renderInterval) clearInterval(renderInterval);
             renderInterval = setInterval(() => {
                 renderClock();
