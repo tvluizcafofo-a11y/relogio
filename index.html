@@ -137,9 +137,17 @@
             z-index:5; font-family:monospace; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:4px;
         }
         #debug span { color:#8f8; }
+
+        /* Elemento de áudio oculto */
+        #chimeAudio {
+            display: none;
+        }
     </style>
 </head>
 <body>
+    <!-- Áudio oculto -->
+    <audio id="chimeAudio" preload="auto" style="display:none;"></audio>
+
     <canvas id="c"></canvas>
 
     <div id="configBtn" title="Configurações" class="mode-none">⚙️</div>
@@ -272,13 +280,17 @@
             // ===== URL DO SOM (CAMINHO ABSOLUTO) =====
             const DEFAULT_CHIME_URL = 'https://tvluizcafofo-a11y.github.io/relogio/chime.mp3';
 
+            // ===== ELEMENTO DE ÁUDIO =====
+            const audioEl = document.getElementById('chimeAudio');
+            audioEl.src = DEFAULT_CHIME_URL;
+
             // ===== ESTADO =====
             let offsetX = 0, offsetY = 0;
             let utc = -3.0;
             let pointerScale = 100;
             let stretchW = 100, stretchH = 100;
             let chimeEnabled = false;
-            let chimeSound = null;
+            let chimeSound = DEFAULT_CHIME_URL; // salva a URL atual
             let chimeIntervalSeconds = 3;
             let wakeLockEnabled = false;
             let config = false;
@@ -292,6 +304,7 @@
             const KEY_WAKELOCK = 'relogio_wakelock';
             const KEY_CHIME_INTERVAL = 'relogio_chime_interval';
             const MAX_BASE64_STORE = 300 * 1024;
+            let isPlayingChime = false; // para evitar sobreposição
 
             // ===== IMAGEM =====
             let img = new Image();
@@ -300,8 +313,6 @@
             let imgFileSize = null;
 
             // ===== SOM =====
-            let audioCtx = null;
-            let audioBuffer = null;
             let lastChimeHour = -1;
             let chimeCheckInterval = null;
             let renderInterval = null;
@@ -347,7 +358,7 @@
             const chimeIntervalDec = document.getElementById('chimeIntervalDec');
             const chimeIntervalInc = document.getElementById('chimeIntervalInc');
 
-            // ===== POSIÇÃO DOS PAINÉIS =====
+            // ===== POSIÇÃO DOS PAINÉIS ===== (código inalterado)
             let panelPos = { x: 0, y: 0 };
             let viewPos = { x: 0, y: 0 };
             const PANEL_KEY = 'relogio_panel_pos';
@@ -472,103 +483,100 @@
                 else imgSizeEl.textContent = (bytes / (1024 * 1024)).toFixed(2) + ' MB';
             }
 
-            // ===== SOM - FUNÇÃO MODIFICADA =====
+            // ===== FUNÇÃO DE REPRODUÇÃO DE SOM (USANDO ELEMENTO <AUDIO>) =====
+            function playChimeSound(count) {
+                if (isPlayingChime) {
+                    console.warn('Já está tocando, aguarde...');
+                    return;
+                }
+                // Verifica se o áudio pode ser reproduzido
+                if (!audioEl.src || audioEl.src === '') {
+                    showToast('⚠️ Nenhum som carregado', '#ffaa44');
+                    return;
+                }
+
+                // Reinicia o áudio para o início
+                audioEl.currentTime = 0;
+                isPlayingChime = true;
+                let played = 0;
+                const intervalMs = Math.max(100, chimeIntervalSeconds * 1000);
+
+                function playNext() {
+                    if (played >= count) {
+                        isPlayingChime = false;
+                        // Desliga a tela se foi ativada automaticamente
+                        setTimeout(() => {
+                            if (autoWakeLockActive && !wakeLockEnabled) {
+                                releaseWakeLockAuto();
+                            }
+                        }, 2000);
+                        return;
+                    }
+                    // Toca o áudio
+                    audioEl.play().catch(err => {
+                        console.warn('Erro ao tocar áudio:', err);
+                        showToast('⚠️ Não foi possível tocar o som', '#ffaa44');
+                        isPlayingChime = false;
+                    });
+                    played++;
+                    if (played < count) {
+                        setTimeout(playNext, intervalMs);
+                    } else {
+                        setTimeout(() => {
+                            isPlayingChime = false;
+                            if (autoWakeLockActive && !wakeLockEnabled) {
+                                releaseWakeLockAuto();
+                            }
+                        }, 2000);
+                    }
+                }
+                playNext();
+                console.log(`🔔 Tocando ${count} badaladas (hora ${new Date().getHours()})`);
+            }
+
+            // ===== FUNÇÃO PARA CARREGAR NOVO SOM =====
             function loadChimeSound(src) {
                 if (!src) {
                     chimeSound = null;
-                    audioBuffer = null;
+                    audioEl.src = '';
                     chimeStatus.textContent = 'Nenhum som selecionado';
                     return;
                 }
                 chimeSound = src;
+                audioEl.src = src;
+                // Tentar carregar para verificar se está acessível
+                audioEl.load();
                 let displaySrc = src.length > 40 ? src.substring(0,40)+'...' : src;
                 chimeStatus.textContent = '📢 Carregando ' + displaySrc + ' ...';
-                if (src.startsWith('data:audio') || src.startsWith('http')) {
-                    fetch(src)
-                        .then(response => {
-                            if (!response.ok) throw new Error('HTTP ' + response.status);
-                            return response.arrayBuffer();
-                        })
-                        .then(arrayBuffer => {
-                            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                            return audioCtx.decodeAudioData(arrayBuffer);
-                        })
-                        .then(buffer => {
-                            audioBuffer = buffer;
-                            console.log('🔊 Som de badalada carregado:', src);
-                            chimeStatus.textContent = '✅ ' + (src === DEFAULT_CHIME_URL ? 'Som padrão' : displaySrc) + ' carregado';
-                            if (src === DEFAULT_CHIME_URL && !localStorage.getItem(KEY_CHIME_SOUND)) {
-                                localStorage.setItem(KEY_CHIME_SOUND, src);
-                            }
-                            chimeUrlInput.value = src;
-                        })
-                        .catch(err => {
-                            console.warn('Erro ao carregar som:', err);
-                            chimeStatus.textContent = '⚠️ Erro ao carregar som (verifique o arquivo)';
-                            audioBuffer = null;
-                        });
-                } else {
-                    audioBuffer = null;
-                    chimeStatus.textContent = '⚠️ Formato não suportado';
-                }
-                saveAllSettings();
-            }
 
-            // ===== PLAY CHIME =====
-            function playChime(count) {
-                if (!audioBuffer) {
-                    console.warn('Áudio não carregado');
-                    showToast('⚠️ Som não carregado', '#ffaa44');
-                    return;
-                }
-                try {
-                    if (!audioCtx) {
-                        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    }
-                    if (audioCtx.state === 'suspended') {
-                        audioCtx.resume().catch(e => console.warn('Erro ao resumir AudioContext:', e));
-                    }
-
-                    let played = 0;
-                    const intervalMs = Math.max(100, chimeIntervalSeconds * 1000);
-
-                    function playNext() {
-                        if (played >= count) {
-                            setTimeout(() => {
-                                if (autoWakeLockActive && !wakeLockEnabled) {
-                                    releaseWakeLockAuto();
-                                }
-                            }, 2000);
-                            return;
-                        }
-                        const source = audioCtx.createBufferSource();
-                        source.buffer = audioBuffer;
-                        source.connect(audioCtx.destination);
-                        source.start();
-                        played++;
-                        if (played < count) {
-                            setTimeout(playNext, intervalMs);
-                        } else {
-                            setTimeout(() => {
-                                if (autoWakeLockActive && !wakeLockEnabled) {
-                                    releaseWakeLockAuto();
-                                }
-                            }, 2000);
-                        }
-                    }
-                    playNext();
-                    console.log(`🔔 Tocando ${count} badaladas (hora ${new Date().getHours()})`);
-                } catch(e) {
-                    console.warn('Erro ao reproduzir som:', e);
+                // Verifica se o áudio pode ser carregado
+                audioEl.oncanplaythrough = function() {
+                    chimeStatus.textContent = '✅ ' + (src === DEFAULT_CHIME_URL ? 'Som padrão' : displaySrc) + ' carregado';
+                    audioEl.oncanplaythrough = null;
+                    chimeUrlInput.value = src;
+                    saveAllSettings();
+                };
+                audioEl.onerror = function(e) {
+                    console.warn('Erro ao carregar áudio:', e);
+                    chimeStatus.textContent = '⚠️ Erro ao carregar som (verifique o arquivo)';
+                    audioEl.onerror = null;
+                };
+                // Se o áudio já estiver carregado, dispara o evento manualmente
+                if (audioEl.readyState >= 3) {
+                    chimeStatus.textContent = '✅ ' + (src === DEFAULT_CHIME_URL ? 'Som padrão' : displaySrc) + ' carregado';
+                    chimeUrlInput.value = src;
+                    saveAllSettings();
                 }
             }
 
+            // ===== TESTAR SOM =====
             function testChimeSound() {
-                if (!audioBuffer) {
+                if (!audioEl.src || audioEl.src === '') {
                     showToast('⚠️ Carregue um som primeiro', '#ffaa44');
                     return;
                 }
-                playChime(1);
+                // Ativa o wake lock automático durante o teste (opcional)
+                playChimeSound(1);
                 showToast('🔊 Testando som', '#8f8');
             }
 
@@ -588,7 +596,7 @@
                         if (!wakeLockEnabled && !autoWakeLockActive) {
                             requestWakeLockAuto();
                         }
-                        playChime(chimeCount);
+                        playChimeSound(chimeCount);
                         showToast(`🔔 ${chimeCount} badaladas`, '#ffcc88');
                     }
 
@@ -598,10 +606,6 @@
                             requestWakeLockAuto();
                             console.log(`💡 Ativando wake lock automático para as ${nextHour}h (1min antes)`);
                         }
-                    }
-
-                    if (audioCtx && audioCtx.state === 'suspended') {
-                        audioCtx.resume().catch(e => {});
                     }
                 }, 100);
                 console.log('⏰ Verificação de badaladas e wake lock automático iniciada (100ms)');
@@ -1339,7 +1343,7 @@
                 stretchW = 100;
                 stretchH = 100;
                 chimeSound = null;
-                audioBuffer = null;
+                audioEl.src = '';
                 chimeStatus.textContent = 'Nenhum som selecionado';
                 chimeUrlInput.value = '';
                 chimeIntervalSeconds = 3;
@@ -1523,7 +1527,7 @@
                     loaded = false;
                     imgFileSize = null;
                     chimeSound = null;
-                    audioBuffer = null;
+                    audioEl.src = '';
                     showImgSize(null);
                     chimeStatus.textContent = 'Nenhum som selecionado';
                     chimeIntervalSeconds = 3;
@@ -1558,7 +1562,7 @@
                         loaded = false;
                         imgFileSize = null;
                         chimeSound = null;
-                        audioBuffer = null;
+                        audioEl.src = '';
                         showImgSize(null);
                         chimeStatus.textContent = 'Nenhum som selecionado';
                         chimeIntervalSeconds = 3;
