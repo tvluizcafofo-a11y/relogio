@@ -194,12 +194,12 @@
 
         <div class="sep"></div>
 
-        <!-- Manter tela ligada -->
+        <!-- Manter tela ligada (manual) -->
         <div class="row" style="justify-content:space-between;">
-            <span style="color:#aaa; font-size:13px;">💡 Manter tela ligada</span>
+            <span style="color:#aaa; font-size:13px;">💡 Manter tela ligada (manual)</span>
             <button class="btn" id="wakeLockToggle" style="font-size:13px; padding:2px 12px;">Ativar</button>
         </div>
-        <div class="small-text" style="color:#666; margin-left:30px;">A tela será ligada automaticamente 1min antes da hora cheia</div>
+        <div class="small-text" style="color:#666; margin-left:30px;">A tela será ligada automaticamente 3 segundos antes da hora cheia</div>
 
         <div class="sep"></div>
 
@@ -292,19 +292,19 @@
             let chimeEnabled = false;
             let chimeSound = DEFAULT_CHIME_URL; // salva a URL atual
             let chimeIntervalSeconds = 3;
-            let wakeLockEnabled = false;
+            let wakeLockEnabled = false; // manual
             let config = false;
             let viewConfig = false;
             let wakeLock = null;
             let wakeLockCheckInterval = null;
-            let autoWakeLockActive = false;
+            let autoWakeLockActive = false; // ativado automaticamente (3s antes)
             const KEY = 'relogio_conf_v53';
             const KEY_LAST = 'relogio_last_clock';
             const KEY_CHIME = 'relogio_chime';
             const KEY_WAKELOCK = 'relogio_wakelock';
             const KEY_CHIME_INTERVAL = 'relogio_chime_interval';
             const MAX_BASE64_STORE = 300 * 1024;
-            let isPlayingChime = false; // para evitar sobreposição
+            let isPlayingChime = false;
 
             // ===== IMAGEM =====
             let img = new Image();
@@ -358,7 +358,7 @@
             const chimeIntervalDec = document.getElementById('chimeIntervalDec');
             const chimeIntervalInc = document.getElementById('chimeIntervalInc');
 
-            // ===== POSIÇÃO DOS PAINÉIS ===== (código inalterado)
+            // ===== POSIÇÃO DOS PAINÉIS =====
             let panelPos = { x: 0, y: 0 };
             let viewPos = { x: 0, y: 0 };
             const PANEL_KEY = 'relogio_panel_pos';
@@ -489,13 +489,11 @@
                     console.warn('Já está tocando, aguarde...');
                     return;
                 }
-                // Verifica se o áudio pode ser reproduzido
                 if (!audioEl.src || audioEl.src === '') {
                     showToast('⚠️ Nenhum som carregado', '#ffaa44');
                     return;
                 }
 
-                // Reinicia o áudio para o início
                 audioEl.currentTime = 0;
                 isPlayingChime = true;
                 let played = 0;
@@ -504,7 +502,7 @@
                 function playNext() {
                     if (played >= count) {
                         isPlayingChime = false;
-                        // Desliga a tela se foi ativada automaticamente
+                        // Desliga a tela se foi ativada automaticamente (apenas se não estiver manual)
                         setTimeout(() => {
                             if (autoWakeLockActive && !wakeLockEnabled) {
                                 releaseWakeLockAuto();
@@ -544,12 +542,10 @@
                 }
                 chimeSound = src;
                 audioEl.src = src;
-                // Tentar carregar para verificar se está acessível
                 audioEl.load();
                 let displaySrc = src.length > 40 ? src.substring(0,40)+'...' : src;
                 chimeStatus.textContent = '📢 Carregando ' + displaySrc + ' ...';
 
-                // Verifica se o áudio pode ser carregado
                 audioEl.oncanplaythrough = function() {
                     chimeStatus.textContent = '✅ ' + (src === DEFAULT_CHIME_URL ? 'Som padrão' : displaySrc) + ' carregado';
                     audioEl.oncanplaythrough = null;
@@ -561,7 +557,6 @@
                     chimeStatus.textContent = '⚠️ Erro ao carregar som (verifique o arquivo)';
                     audioEl.onerror = null;
                 };
-                // Se o áudio já estiver carregado, dispara o evento manualmente
                 if (audioEl.readyState >= 3) {
                     chimeStatus.textContent = '✅ ' + (src === DEFAULT_CHIME_URL ? 'Som padrão' : displaySrc) + ' carregado';
                     chimeUrlInput.value = src;
@@ -575,12 +570,11 @@
                     showToast('⚠️ Carregue um som primeiro', '#ffaa44');
                     return;
                 }
-                // Ativa o wake lock automático durante o teste (opcional)
                 playChimeSound(1);
                 showToast('🔊 Testando som', '#8f8');
             }
 
-            // ===== VERIFICAÇÃO DE BADALADA E WAKE LOCK AUTOMÁTICO =====
+            // ===== VERIFICAÇÃO DE BADALADA E WAKE LOCK AUTOMÁTICO (3 segundos antes) =====
             function startChimeCheck() {
                 if (chimeCheckInterval) clearInterval(chimeCheckInterval);
                 chimeCheckInterval = setInterval(() => {
@@ -589,26 +583,27 @@
                     const minute = now.getMinutes();
                     const second = now.getSeconds();
 
+                    // Verifica se faltam 3 segundos para a hora cheia (minuto=59, segundo=57)
+                    if (chimeEnabled && minute === 59 && second === 57) {
+                        // Ativa o WakeLock automaticamente, se não estiver ativo manualmente
+                        if (!wakeLockEnabled && !autoWakeLockActive) {
+                            requestWakeLockAuto();
+                            console.log(`💡 Ativando wake lock automático (3s antes da hora ${(hour+1)%24}h)`);
+                        }
+                    }
+
+                    // Verifica se é hora cheia (minuto=0, segundo=0)
                     if (chimeEnabled && minute === 0 && second === 0 && hour !== lastChimeHour) {
                         lastChimeHour = hour;
                         const chimeCount = hour % 12 === 0 ? 12 : hour % 12;
                         console.log(`🔔 Badaladas: ${chimeCount} (hora ${hour})`);
-                        if (!wakeLockEnabled && !autoWakeLockActive) {
-                            requestWakeLockAuto();
-                        }
+                        // Se o wake lock automático não estiver ativo (caso o usuário já tenha manual), não faz nada
+                        // A função playChimeSound já cuida de desligar após 2 segundos
                         playChimeSound(chimeCount);
                         showToast(`🔔 ${chimeCount} badaladas`, '#ffcc88');
                     }
-
-                    if (chimeEnabled && minute === 59 && second === 0) {
-                        const nextHour = (hour + 1) % 24;
-                        if (!wakeLockEnabled && !autoWakeLockActive) {
-                            requestWakeLockAuto();
-                            console.log(`💡 Ativando wake lock automático para as ${nextHour}h (1min antes)`);
-                        }
-                    }
                 }, 100);
-                console.log('⏰ Verificação de badaladas e wake lock automático iniciada (100ms)');
+                console.log('⏰ Verificação de badaladas e wake lock automático (3s antes) iniciada (100ms)');
             }
 
             function stopChimeCheck() {
@@ -651,12 +646,12 @@
             }
 
             async function requestWakeLockAuto() {
-                if (wakeLock) return;
+                if (wakeLock) return; // já existe
                 try {
                     if ('wakeLock' in navigator) {
                         wakeLock = await navigator.wakeLock.request('screen');
                         autoWakeLockActive = true;
-                        console.log('💡 WakeLock ativado automaticamente');
+                        console.log('💡 WakeLock ativado automaticamente (3s antes)');
                         startWakeLockCheck();
                         document.addEventListener('visibilitychange', () => {
                             if (document.visibilityState === 'visible' && (wakeLockEnabled || autoWakeLockActive) && !wakeLock) {
@@ -827,7 +822,7 @@
                 } catch(e) { console.warn('Erro ao salvar último:', e); }
             }
 
-            // ===== CARREGAR CONFIGURAÇÕES (MODIFICADO) =====
+            // ===== CARREGAR CONFIGURAÇÕES =====
             function loadAllSettings() {
                 try {
                     const raw = localStorage.getItem(KEY);
@@ -1353,6 +1348,10 @@
                 renderClock();
                 saveLastClock();
                 if (autoWakeLockActive) releaseWakeLockAuto();
+                if (wakeLockEnabled) releaseWakeLock();
+                wakeLockEnabled = false;
+                saveWakeLockState();
+                updateWakeLockUI();
                 loadChimeSound(DEFAULT_CHIME_URL);
             });
 
