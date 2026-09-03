@@ -20,28 +20,9 @@
       left: 0;
       width: 100vw;
       height: 100vh;
-      transform-origin: center center;
-      transition: transform 0.4s ease, width 0.4s ease, height 0.4s ease;
       background: #000;
       z-index: 1;
     }
-    #clock-container.rotated-right {
-      transform: rotate(90deg);
-      width: 100vh;
-      height: 100vw;
-      top: 50%;
-      left: 50%;
-      margin: -50vw 0 0 -50vh;
-    }
-    #clock-container.rotated-left {
-      transform: rotate(-90deg);
-      width: 100vh;
-      height: 100vw;
-      top: 50%;
-      left: 50%;
-      margin: -50vw 0 0 -50vh;
-    }
-    /* Ajuste para o canvas dentro do container */
     #c {
       display: block;
       width: 100%;
@@ -74,38 +55,7 @@
     #configBtn.mode-view { background:#3060c0; border-color:#77aaff; }
     #configBtn.mode-none { background:rgba(30,30,30,0.85); border-color:rgba(255,255,255,0.3); }
 
-    /* Botões de orientação (rodapé direito) */
-    #orientBtns {
-      position:fixed;
-      bottom:20px;
-      right:20px;
-      display:flex;
-      gap:8px;
-      z-index:20;
-    }
-    .orient-btn {
-      width:56px;
-      height:56px;
-      border-radius:50%;
-      background:rgba(30,30,30,0.85);
-      border:2px solid rgba(255,255,255,0.3);
-      color:#fff;
-      font-size:28px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      cursor:pointer;
-      user-select:none;
-      box-shadow:0 4px 15px rgba(0,0,0,0.6);
-      transition:background 0.2s, border-color 0.2s;
-    }
-    .orient-btn.active {
-      border-color:#8f8;
-      background:rgba(50,200,100,0.2);
-    }
-    .orient-btn:active { background:rgba(255,255,255,0.2); }
-
-    /* Painéis (configurações e visualização) - mantidos */
+    /* Painéis (configurações e visualização) */
     #panel, #viewPanel {
       position:fixed;
       background:rgba(0,0,0,0.88);
@@ -201,12 +151,6 @@
 
   <!-- Botão Configurações (esquerda) -->
   <div id="configBtn" title="Configurações" class="mode-none">⚙️</div>
-
-  <!-- Botões de orientação (direita) -->
-  <div id="orientBtns">
-    <button class="orient-btn" id="portraitBtn" title="Retrato">📱</button>
-    <button class="orient-btn" id="landscapeBtn" title="Paisagem">🖥️</button>
-  </div>
 
   <!-- PAINEL DE CONFIGURAÇÕES -->
   <div id="panel">
@@ -358,10 +302,6 @@
       let autoWakeLockActive = false;
       let isPlayingChime = false;
 
-      // ===== ORIENTAÇÃO (rotação) =====
-      let currentRotation = 0; // 0, 90, -90
-      const ROTATION_KEY = 'relogio_rotation';
-
       const KEY = 'relogio_conf_v53';
       const KEY_LAST = 'relogio_last_clock';
       const KEY_CHIME = 'relogio_chime';
@@ -422,8 +362,6 @@
       const chimeIntervalDec = document.getElementById('chimeIntervalDec');
       const chimeIntervalInc = document.getElementById('chimeIntervalInc');
       const saveImageConfigBtn = document.getElementById('saveImageConfigBtn');
-      const portraitBtn = document.getElementById('portraitBtn');
-      const landscapeBtn = document.getElementById('landscapeBtn');
 
       // ===== POSIÇÃO DOS PAINÉIS =====
       let panelPos = { x: 0, y: 0 };
@@ -594,83 +532,6 @@
         return false;
       }
 
-      // ===== ORIENTAÇÃO (ROTAÇÃO) =====
-      function loadRotation() {
-        try {
-          const val = localStorage.getItem(ROTATION_KEY);
-          if (val === '90') currentRotation = 90;
-          else if (val === '-90') currentRotation = -90;
-          else currentRotation = 0;
-        } catch(e) { currentRotation = 0; }
-        applyRotation();
-        updateOrientUI();
-      }
-
-      function saveRotation() {
-        try { localStorage.setItem(ROTATION_KEY, String(currentRotation)); } catch(e) {}
-      }
-
-      function applyRotation() {
-        container.className = '';
-        if (currentRotation === 90) {
-          container.classList.add('rotated-right');
-        } else if (currentRotation === -90) {
-          container.classList.add('rotated-left');
-        }
-        // Redimensiona o canvas após a transição
-        setTimeout(resizeCanvas, 100);
-        // Tenta travar a orientação da tela (dispositivos móveis)
-        if (screen.orientation && screen.orientation.lock) {
-          if (currentRotation === 90 || currentRotation === -90) {
-            screen.orientation.lock('landscape').catch(() => {});
-          } else {
-            screen.orientation.lock('portrait').catch(() => {});
-          }
-        }
-      }
-
-      function setRotation(deg) {
-        // deg deve ser 0, 90 ou -90
-        currentRotation = deg;
-        saveRotation();
-        applyRotation();
-        updateOrientUI();
-        resizeCanvas();
-      }
-
-      function toggleOrientation(target) {
-        // target: 'portrait' (0) ou 'landscape' (90 ou -90)
-        // Se estiver em retrato e clicar em paisagem, gira para a esquerda (-90)
-        // Se estiver em paisagem e clicar em retrato, gira para a direita (0)
-        // Mas o usuário pode clicar no botão de paisagem estando já em paisagem? Vamos alternar.
-        if (target === 'portrait') {
-          // Se já estiver em retrato, não faz nada, senão volta para 0
-          if (currentRotation !== 0) {
-            setRotation(0);
-          }
-        } else if (target === 'landscape') {
-          // Se já estiver em paisagem, não faz nada, senão aplica -90 (esquerda)
-          if (currentRotation === 0) {
-            setRotation(-90); // gira para esquerda
-          } else if (currentRotation === 90) {
-            // Se estava virado para direita, pode virar para esquerda ou manter? Vamos alternar entre -90 e 90?
-            // O pedido: "quando o app estiver na posição retrato e clicar no botão paisagem, girar o app para a esquerda"
-            // então sempre que clicar em paisagem a partir do retrato, vai para -90.
-            // Se já estiver em -90, não faz nada.
-            // Se estiver em 90 (paisagem invertida), também deve ir para -90? Vamos padronizar: paisagem sempre -90.
-            setRotation(-90);
-          }
-        }
-      }
-
-      function updateOrientUI() {
-        portraitBtn.classList.toggle('active', currentRotation === 0);
-        landscapeBtn.classList.toggle('active', currentRotation === -90 || currentRotation === 90);
-      }
-
-      portraitBtn.addEventListener('click', () => toggleOrientation('portrait'));
-      landscapeBtn.addEventListener('click', () => toggleOrientation('landscape'));
-
       // ===== ÁUDIO =====
       function playChimeSound(count) {
         if (isPlayingChime) {
@@ -750,7 +611,7 @@
         showToast('🔊 Testando som', '#8f8');
       }
 
-      // ===== BADALADAS (CORRIGIDO) =====
+      // ===== BADALADAS =====
       let lastCheckedMinute = -1;
 
       function startChimeCheck() {
@@ -775,12 +636,10 @@
         const minute = now.getMinutes();
         const second = now.getSeconds();
 
-        // Verifica se é exatamente 00:00 (hora cheia)
         if (minute === 0 && second === 0) {
           if (hour !== lastChimeHour) {
             lastChimeHour = hour;
             const count = (hour % 12 === 0) ? 12 : (hour % 12);
-            // Ativa wake lock automático se necessário
             if (!wakeLockEnabled && !autoWakeLockActive) {
               requestWakeLockAuto();
             }
@@ -789,14 +648,12 @@
           }
         }
 
-        // Wake lock automático 3 segundos antes
         if (chimeEnabled && minute === 59 && second >= 57 && second <= 59) {
           if (!wakeLockEnabled && !autoWakeLockActive) {
             requestWakeLockAuto();
             console.log(`💡 Ativando wake lock automático (3s antes da hora ${(hour+1)%24}h)`);
           }
         }
-        // Libera wake lock automático se passou da hora
         if (autoWakeLockActive && minute === 0 && second > 5) {
           releaseWakeLockAuto();
         }
@@ -1095,17 +952,10 @@
 
       // ===== REDIMENSIONAR CANVAS =====
       function resizeCanvas() {
-        // O container pode estar rotacionado, então as dimensões da janela são trocadas
         const w = window.innerWidth;
         const h = window.innerHeight;
-        if (currentRotation === 90 || currentRotation === -90) {
-          // Em paisagem, trocamos as dimensões para o canvas
-          canvas.width = h;
-          canvas.height = w;
-        } else {
-          canvas.width = w;
-          canvas.height = h;
-        }
+        canvas.width = w;
+        canvas.height = h;
         // Ajusta posição dos painéis
         if (panel.classList.contains('visible')) {
           const rect = panel.getBoundingClientRect();
@@ -1227,13 +1077,8 @@
 
         const cx = w/2 + offsetX;
         const cy = h/2 + offsetY;
-        // Raio baseado na orientação (se estiver em paisagem, usa a largura)
-        let r;
-        if (currentRotation === 90 || currentRotation === -90) {
-          r = w * 0.38; // paisagem
-        } else {
-          r = Math.min(w, h) * 0.4; // retrato
-        }
+        // SEMPRE em retrato: usa a menor dimensão para o raio
+        const r = Math.min(w, h) * 0.4;
         const ptrFactor = pointerScale / 100;
 
         const hourDeg = (hours % 12) * 30 + minutes * 0.5 + seconds * (0.5 / 60);
@@ -1606,8 +1451,7 @@
           keys.forEach(k => {
             if (k.startsWith(KEY_IMG_CONFIG_PREFIX) ||
                 k === KEY || k === KEY_LAST || k === KEY_CHIME ||
-                k === KEY_WAKELOCK || k === KEY_CHIME_INTERVAL ||
-                k === ROTATION_KEY) {
+                k === KEY_WAKELOCK || k === KEY_CHIME_INTERVAL) {
               localStorage.removeItem(k);
             }
           });
@@ -1638,11 +1482,6 @@
           updateDisplay();
           renderClock();
           loadChimeSound(DEFAULT_CHIME_URL);
-          // reset rotação
-          currentRotation = 0;
-          saveRotation();
-          applyRotation();
-          updateOrientUI();
           resizeCanvas();
         } catch(e) { console.error('Erro ao limpar:', e); }
       }
@@ -1678,10 +1517,6 @@
             updateDisplay();
             renderClock();
             loadChimeSound(DEFAULT_CHIME_URL);
-            currentRotation = 0;
-            saveRotation();
-            applyRotation();
-            updateOrientUI();
             resizeCanvas();
           } catch(e) { console.error('Erro ao limpar tudo:', e); }
         }
@@ -1695,7 +1530,6 @@
       loadChimeState();
       loadWakeLockState();
       loadChimeInterval();
-      loadRotation(); // carrega rotação
       loadAllSettings();
 
       if (imgData) {
