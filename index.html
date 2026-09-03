@@ -139,6 +139,11 @@
         #debug span { color:#8f8; }
 
         #chimeAudio { display: none; }
+        
+        /* Estilo dos botões de orientação */
+        .orient-btn.toggle-on { background:rgba(50,200,100,0.25); color:#8f8; border-color:#8f8; }
+        .orient-btn.toggle-off { background:rgba(255,80,80,0.15); color:#f88; border-color:#f88; }
+        .orient-btn { border:1px solid rgba(255,255,255,0.1); padding:4px 12px; font-size:14px; }
     </style>
 </head>
 <body>
@@ -258,6 +263,12 @@
             <button class="btn reset" id="resetStretch" style="font-size:12px; padding:2px 8px;">↺</button>
         </div>
 
+        <!-- Orientação -->
+        <div class="row" style="justify-content:center; gap:8px; margin-top:4px;">
+            <button class="btn orient-btn" data-orient="portrait" style="font-size:14px; padding:4px 12px;">📱 Retrato</button>
+            <button class="btn orient-btn" data-orient="landscape" style="font-size:14px; padding:4px 12px;">🖥️ Paisagem</button>
+        </div>
+
         <div class="sep"></div>
 
         <!-- Salvar configurações da imagem atual -->
@@ -299,6 +310,10 @@
             let isPlayingChime = false;
             let currentImageKey = null; // nome da imagem para salvar configurações
 
+            // ===== NOVO: ORIENTAÇÃO =====
+            let orientationMode = 'portrait'; // 'portrait' | 'landscape'
+            const ORIENT_KEY = 'relogio_orient';
+
             const KEY = 'relogio_conf_v53';
             const KEY_LAST = 'relogio_last_clock';
             const KEY_CHIME = 'relogio_chime';
@@ -315,7 +330,8 @@
 
             // ===== SOM =====
             let lastChimeHour = -1;
-            let chimeCheckInterval = null;
+            let lastCheckedMinute = -1; // para detecção de virada de hora
+            let chimeIntervalId = null;
             let renderInterval = null;
 
             // ===== DOM =====
@@ -359,6 +375,7 @@
             const chimeIntervalDec = document.getElementById('chimeIntervalDec');
             const chimeIntervalInc = document.getElementById('chimeIntervalInc');
             const saveImageConfigBtn = document.getElementById('saveImageConfigBtn');
+            const orientBtns = document.querySelectorAll('.orient-btn');
 
             // ===== POSIÇÃO DOS PAINÉIS =====
             let panelPos = { x: 0, y: 0 };
@@ -488,15 +505,11 @@
             // ===== GERENCIAMENTO DE CONFIGURAÇÕES POR IMAGEM =====
             function getImageKey(src) {
                 if (!src) return null;
-                // Extrai o nome do arquivo da URL ou data URL
                 if (src.startsWith('data:image')) {
-                    // Para imagens base64, usa um hash curto (primeiros 20 caracteres)
                     return 'base64_' + src.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '');
                 }
-                // Para URLs, pega o último segmento (nome do arquivo)
                 const parts = src.split('/');
                 let filename = parts[parts.length - 1];
-                // Remove query string
                 filename = filename.split('?')[0];
                 if (!filename) filename = 'imagem_' + Date.now();
                 return filename;
@@ -544,6 +557,39 @@
                 }
                 return false;
             }
+
+            // ===== ORIENTAÇÃO =====
+            function loadOrientation() {
+                try {
+                    const val = localStorage.getItem(ORIENT_KEY);
+                    if (val === 'portrait' || val === 'landscape') orientationMode = val;
+                } catch(e) {}
+                updateOrientUI();
+            }
+
+            function saveOrientation() {
+                try { localStorage.setItem(ORIENT_KEY, orientationMode); } catch(e) {}
+            }
+
+            function setOrientation(mode) {
+                orientationMode = mode;
+                saveOrientation();
+                updateOrientUI();
+                resizeCanvas(); // redesenha com nova orientação
+            }
+
+            function updateOrientUI() {
+                orientBtns.forEach(b => {
+                    b.classList.toggle('toggle-on', b.dataset.orient === orientationMode);
+                    b.classList.toggle('toggle-off', b.dataset.orient !== orientationMode);
+                });
+            }
+
+            orientBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    setOrientation(btn.dataset.orient);
+                });
+            });
 
             // ===== ÁUDIO =====
             function playChimeSound(count) {
@@ -634,35 +680,51 @@
 
             // ===== WAKE LOCK AUTOMÁTICO (3s antes) =====
             function startChimeCheck() {
-                if (chimeCheckInterval) clearInterval(chimeCheckInterval);
-                chimeCheckInterval = setInterval(() => {
-                    const now = new Date();
-                    const hour = now.getHours();
-                    const minute = now.getMinutes();
-                    const second = now.getSeconds();
-
-                    if (chimeEnabled && minute === 59 && second === 57) {
-                        if (!wakeLockEnabled && !autoWakeLockActive) {
-                            requestWakeLockAuto();
-                            console.log(`💡 Ativando wake lock automático (3s antes da hora ${(hour+1)%24}h)`);
-                        }
-                    }
-
-                    if (chimeEnabled && minute === 0 && second === 0 && hour !== lastChimeHour) {
-                        lastChimeHour = hour;
-                        const chimeCount = hour % 12 === 0 ? 12 : hour % 12;
-                        console.log(`🔔 Badaladas: ${chimeCount} (hora ${hour})`);
-                        playChimeSound(chimeCount);
-                        showToast(`🔔 ${chimeCount} badaladas`, '#ffcc88');
-                    }
-                }, 100);
-                console.log('⏰ Verificação de badaladas e wake lock automático (3s antes) iniciada');
+                if (chimeIntervalId) clearInterval(chimeIntervalId);
+                chimeIntervalId = setInterval(() => {
+                    checkChime();
+                }, 1000);
+                console.log('⏰ Verificação de badaladas e wake lock automático (1s) iniciada');
             }
 
             function stopChimeCheck() {
-                if (chimeCheckInterval) {
-                    clearInterval(chimeCheckInterval);
-                    chimeCheckInterval = null;
+                if (chimeIntervalId) {
+                    clearInterval(chimeIntervalId);
+                    chimeIntervalId = null;
+                }
+            }
+
+            function checkChime() {
+                if (!chimeEnabled) return;
+                const now = new Date();
+                const hour = now.getHours();
+                const minute = now.getMinutes();
+                const second = now.getSeconds();
+
+                // Verifica se o minuto mudou e estamos no segundo 0 (virada)
+                if (minute !== lastCheckedMinute) {
+                    lastCheckedMinute = minute;
+                    if (second === 0 && minute === 0) {
+                        // Hora cheia
+                        if (hour !== lastChimeHour) {
+                            lastChimeHour = hour;
+                            const count = hour % 12 === 0 ? 12 : hour % 12;
+                            playChimeSound(count);
+                            showToast(`🔔 ${count} badaladas`, '#ffcc88');
+                        }
+                    }
+                }
+
+                // Wake lock automático 3 segundos antes da hora cheia
+                if (chimeEnabled && minute === 59 && second >= 57 && second <= 59) {
+                    if (!wakeLockEnabled && !autoWakeLockActive) {
+                        requestWakeLockAuto();
+                        console.log(`💡 Ativando wake lock automático (3s antes da hora ${(hour+1)%24}h)`);
+                    }
+                }
+                // Se passou da hora, libera o wake lock automático
+                if (autoWakeLockActive && minute === 0 && second > 5) {
+                    releaseWakeLockAuto();
                 }
             }
 
@@ -864,7 +926,6 @@
                         stretchH = d.sh ?? 100;
                         if (d.img) {
                             imgData = d.img;
-                            // Não carrega imagem aqui, será carregada depois
                         }
                         if (d.chimeSound) {
                             loadChimeSound(d.chimeSound);
@@ -947,9 +1008,7 @@
                         imgFileSize = size;
                         showImgSize(size);
                     }
-                    // Tenta carregar configurações salvas para esta imagem
                     if (!loadImageConfig(src)) {
-                        // Se não houver configurações salvas, mantém as atuais (ou padrão)
                         console.log('ℹ️ Nenhuma configuração salva para esta imagem, usando valores atuais');
                     }
                     renderClock();
@@ -1111,7 +1170,13 @@
 
                 const cx = w/2 + offsetX;
                 const cy = h/2 + offsetY;
-                const r = Math.min(w, h) * 0.4;
+                // Raio baseado na orientação
+                let r;
+                if (orientationMode === 'landscape') {
+                    r = w * 0.38;
+                } else {
+                    r = Math.min(w, h) * 0.4;
+                }
                 const ptrFactor = pointerScale / 100;
 
                 const hourDeg = (hours % 12) * 30 + minutes * 0.5 + seconds * (0.5 / 60);
@@ -1322,7 +1387,6 @@
                 showToast('↺ Visualização resetada', '#fc8');
             });
 
-            // Botão salvar configurações da imagem atual
             saveImageConfigBtn.addEventListener('click', () => {
                 if (imgData) {
                     saveImageConfig(imgData);
@@ -1443,6 +1507,7 @@
                 updateChimeUI();
                 if (chimeEnabled) {
                     lastChimeHour = -1;
+                    lastCheckedMinute = -1;
                     startChimeCheck();
                     showToast('🔔 Badaladas ativadas (na hora cheia)', '#8f8');
                 } else {
@@ -1484,18 +1549,17 @@
             // ===== LIMPEZA =====
             function clearClockData() {
                 try {
-                    // Remove configurações gerais e de imagem
                     const keys = Object.keys(localStorage);
                     keys.forEach(k => {
                         if (k.startsWith(KEY_IMG_CONFIG_PREFIX) || 
                             k === KEY || k === KEY_LAST || k === KEY_CHIME || 
-                            k === KEY_WAKELOCK || k === KEY_CHIME_INTERVAL) {
+                            k === KEY_WAKELOCK || k === KEY_CHIME_INTERVAL ||
+                            k === ORIENT_KEY) {
                             localStorage.removeItem(k);
                         }
                     });
                     statusEl.textContent = 'limpo';
                     showToast('🗑️ Dados removidos!', '#ffaa44');
-                    // Reset
                     offsetX = 0; offsetY = 0;
                     utc = -3.0;
                     pointerScale = 100;
@@ -1521,6 +1585,11 @@
                     updateDisplay();
                     renderClock();
                     loadChimeSound(DEFAULT_CHIME_URL);
+                    // reset orientação
+                    orientationMode = 'portrait';
+                    saveOrientation();
+                    updateOrientUI();
+                    resizeCanvas();
                 } catch(e) { console.error('Erro ao limpar:', e); }
             }
             function clearAllStorage() {
@@ -1529,7 +1598,6 @@
                         localStorage.clear();
                         statusEl.textContent = 'limpo (tudo)';
                         showToast('🗑️ Armazenamento limpo!', '#ffaa44');
-                        // Reset completo
                         offsetX = 0; offsetY = 0;
                         utc = -3.0;
                         pointerScale = 100;
@@ -1555,6 +1623,10 @@
                         updateDisplay();
                         renderClock();
                         loadChimeSound(DEFAULT_CHIME_URL);
+                        orientationMode = 'portrait';
+                        saveOrientation();
+                        updateOrientUI();
+                        resizeCanvas();
                     } catch(e) { console.error('Erro ao limpar tudo:', e); }
                 }
             }
@@ -1567,6 +1639,7 @@
             loadChimeState();
             loadWakeLockState();
             loadChimeInterval();
+            loadOrientation();
             loadAllSettings();
 
             if (imgData) {
