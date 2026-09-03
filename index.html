@@ -12,47 +12,104 @@
       height:100%;
       overflow:hidden;
       background:#000;
-      transition: transform 0.4s ease;
     }
-    body.landscape {
-      transform: rotate(90deg);
+
+    #clock-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
       transform-origin: center center;
-      width:100vh;
-      height:100vw;
+      transition: transform 0.4s ease, width 0.4s ease, height 0.4s ease;
+      background: #000;
+      z-index: 1;
     }
-    body.landscape #c {
-      width:100vw;
-      height:100vh;
+    #clock-container.rotated-right {
+      transform: rotate(90deg);
+      width: 100vh;
+      height: 100vw;
+      top: 50%;
+      left: 50%;
+      margin: -50vw 0 0 -50vh;
     }
-    /* Quando em paisagem, o corpo fica com largura=altura da tela e vice-versa */
-    body.landscape {
-      position:absolute;
-      top:50%;
-      left:50%;
-      transform: translate(-50%, -50%) rotate(90deg);
+    #clock-container.rotated-left {
+      transform: rotate(-90deg);
+      width: 100vh;
+      height: 100vw;
+      top: 50%;
+      left: 50%;
+      margin: -50vw 0 0 -50vh;
     }
-    /* Ajuste para que o canvas preencha sempre */
+    /* Ajuste para o canvas dentro do container */
     #c {
-      display:block;
-      width:100vw;
-      height:100vh;
-      background:#000;
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #000;
     }
-    /* Demais estilos (botões, painéis, etc.) permanecem iguais */
+
+    /* Botão de configurações (rodapé esquerdo) */
     #configBtn {
-      position:fixed; bottom:20px; left:20px; width:56px; height:56px;
-      border-radius:50%; background:rgba(30,30,30,0.85); border:2px solid rgba(255,255,255,0.3);
-      color:#fff; font-size:28px; display:flex; align-items:center; justify-content:center;
-      cursor:pointer; z-index:20; user-select:none;
+      position:fixed;
+      bottom:20px;
+      left:20px;
+      width:56px;
+      height:56px;
+      border-radius:50%;
+      background:rgba(30,30,30,0.85);
+      border:2px solid rgba(255,255,255,0.3);
+      color:#fff;
+      font-size:28px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      z-index:20;
+      user-select:none;
       box-shadow:0 4px 15px rgba(0,0,0,0.6);
       transition:background 0.2s;
     }
     #configBtn.mode-config { background:#c05030; border-color:#ffaa77; }
     #configBtn.mode-view { background:#3060c0; border-color:#77aaff; }
     #configBtn.mode-none { background:rgba(30,30,30,0.85); border-color:rgba(255,255,255,0.3); }
+
+    /* Botões de orientação (rodapé direito) */
+    #orientBtns {
+      position:fixed;
+      bottom:20px;
+      right:20px;
+      display:flex;
+      gap:8px;
+      z-index:20;
+    }
+    .orient-btn {
+      width:56px;
+      height:56px;
+      border-radius:50%;
+      background:rgba(30,30,30,0.85);
+      border:2px solid rgba(255,255,255,0.3);
+      color:#fff;
+      font-size:28px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      user-select:none;
+      box-shadow:0 4px 15px rgba(0,0,0,0.6);
+      transition:background 0.2s, border-color 0.2s;
+    }
+    .orient-btn.active {
+      border-color:#8f8;
+      background:rgba(50,200,100,0.2);
+    }
+    .orient-btn:active { background:rgba(255,255,255,0.2); }
+
+    /* Painéis (configurações e visualização) - mantidos */
     #panel, #viewPanel {
       position:fixed;
-      background:rgba(0,0,0,0.88); backdrop-filter:blur(10px);
+      background:rgba(0,0,0,0.88);
+      backdrop-filter:blur(10px);
       border:1px solid rgba(255,255,255,0.12);
       padding:10px 14px 12px 14px;
       color:#eee;
@@ -77,8 +134,8 @@
     .panel-header span { font-size:20px; font-weight:600; color:#ddd; letter-spacing:0.5px; }
     .close { background:none; border:none; color:#aaa; font-size:22px; cursor:pointer; padding:0 4px; }
     .row {
-      display:flex; align-items:center; gap:5px; 
-      flex-wrap:wrap; 
+      display:flex; align-items:center; gap:5px;
+      flex-wrap:wrap;
       padding:3px 0;
     }
     .row label { color:#ccc; min-width:30px; font-size:15px; font-weight:500; }
@@ -117,9 +174,6 @@
     .small-text { font-size:13px; color:#999; margin-top:2px; }
     .img-status { color:#aaa; font-size:13px; word-break:break-all; max-width:100%; }
     .btn-icon { font-size:17px; padding:3px 5px; min-width:28px; }
-    .orient-btn.toggle-on { background:rgba(50,200,100,0.25); color:#8f8; border-color:#8f8; }
-    .orient-btn.toggle-off { background:rgba(255,80,80,0.15); color:#f88; border-color:#f88; }
-    .orient-btn { border:1px solid rgba(255,255,255,0.1); padding:4px 12px; font-size:14px; }
     #toast {
       position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.8);
       background:rgba(0,0,0,0.85); color:#8f8; padding:16px 32px;
@@ -139,10 +193,20 @@
   </style>
 </head>
 <body>
-  <audio id="chimeAudio" preload="auto"></audio>
-  <canvas id="c"></canvas>
+  <div id="clock-container">
+    <canvas id="c"></canvas>
+  </div>
 
+  <audio id="chimeAudio" preload="auto"></audio>
+
+  <!-- Botão Configurações (esquerda) -->
   <div id="configBtn" title="Configurações" class="mode-none">⚙️</div>
+
+  <!-- Botões de orientação (direita) -->
+  <div id="orientBtns">
+    <button class="orient-btn" id="portraitBtn" title="Retrato">📱</button>
+    <button class="orient-btn" id="landscapeBtn" title="Paisagem">🖥️</button>
+  </div>
 
   <!-- PAINEL DE CONFIGURAÇÕES -->
   <div id="panel">
@@ -200,7 +264,7 @@
     </div>
   </div>
 
-  <!-- PAINEL DE VISUALIZAÇÃO -->
+  <!-- PAINEL DE VISUALIZAÇÃO (sem botões de orientação) -->
   <div id="viewPanel">
     <div class="panel-header" id="viewDragHandle">
       <span>📐 Visualização</span>
@@ -255,12 +319,6 @@
       <button class="btn reset" id="resetStretch" style="font-size:12px; padding:2px 8px;">↺</button>
     </div>
 
-    <!-- Orientação (com rotação) -->
-    <div class="row" style="justify-content:center; gap:8px; margin-top:4px;">
-      <button class="btn orient-btn" data-orient="portrait" style="font-size:14px; padding:4px 12px;">📱 Retrato</button>
-      <button class="btn orient-btn" data-orient="landscape" style="font-size:14px; padding:4px 12px;">🖥️ Paisagem</button>
-    </div>
-
     <div class="sep"></div>
 
     <!-- Salvar configurações da imagem atual -->
@@ -276,14 +334,12 @@
 
   <script>
     (function() {
+      const container = document.getElementById('clock-container');
       const canvas = document.getElementById('c');
       const ctx = canvas.getContext('2d');
-      const body = document.body;
 
       // ===== URL DO SOM =====
       const DEFAULT_CHIME_URL = 'https://tvluizcafofo-a11y.github.io/relogio/chime.mp3';
-
-      // ===== ELEMENTO ÁUDIO =====
       const audioEl = document.getElementById('chimeAudio');
       audioEl.src = DEFAULT_CHIME_URL;
 
@@ -301,11 +357,10 @@
       let wakeLockCheckInterval = null;
       let autoWakeLockActive = false;
       let isPlayingChime = false;
-      let currentImageKey = null;
 
-      // ===== ORIENTAÇÃO COM ROTAÇÃO =====
-      let orientationMode = 'portrait'; // 'portrait' | 'landscape'
-      const ORIENT_KEY = 'relogio_orient';
+      // ===== ORIENTAÇÃO (rotação) =====
+      let currentRotation = 0; // 0, 90, -90
+      const ROTATION_KEY = 'relogio_rotation';
 
       const KEY = 'relogio_conf_v53';
       const KEY_LAST = 'relogio_last_clock';
@@ -367,9 +422,10 @@
       const chimeIntervalDec = document.getElementById('chimeIntervalDec');
       const chimeIntervalInc = document.getElementById('chimeIntervalInc');
       const saveImageConfigBtn = document.getElementById('saveImageConfigBtn');
-      const orientBtns = document.querySelectorAll('.orient-btn');
+      const portraitBtn = document.getElementById('portraitBtn');
+      const landscapeBtn = document.getElementById('landscapeBtn');
 
-      // ===== POSIÇÃO DOS PAINÉIS (arrastáveis) =====
+      // ===== POSIÇÃO DOS PAINÉIS =====
       let panelPos = { x: 0, y: 0 };
       let viewPos = { x: 0, y: 0 };
       const PANEL_KEY = 'relogio_panel_pos';
@@ -386,7 +442,7 @@
             panelPos.x = (window.innerWidth - 280) / 2;
             panelPos.y = window.innerHeight - 300;
           }
-        } catch(e) { 
+        } catch(e) {
           panelPos.x = (window.innerWidth - 280) / 2;
           panelPos.y = window.innerHeight - 300;
         }
@@ -413,7 +469,7 @@
             viewPos.x = (window.innerWidth - 368) / 2;
             viewPos.y = window.innerHeight - 420;
           }
-        } catch(e) { 
+        } catch(e) {
           viewPos.x = (window.innerWidth - 368) / 2;
           viewPos.y = window.innerHeight - 420;
         }
@@ -429,7 +485,7 @@
         viewPanel.style.top = viewPos.y + 'px';
       }
 
-      // Arrastar painéis (código mantido)
+      // Arrastar painéis
       function setupDrag(handle, panelEl, posObj, applyFn, saveFn) {
         let isDragging = false;
         let dragStartX = 0, dragStartY = 0;
@@ -538,57 +594,82 @@
         return false;
       }
 
-      // ===== ORIENTAÇÃO COM ROTAÇÃO =====
-      function loadOrientation() {
+      // ===== ORIENTAÇÃO (ROTAÇÃO) =====
+      function loadRotation() {
         try {
-          const val = localStorage.getItem(ORIENT_KEY);
-          if (val === 'portrait' || val === 'landscape') orientationMode = val;
-        } catch(e) {}
-        applyOrientation();
+          const val = localStorage.getItem(ROTATION_KEY);
+          if (val === '90') currentRotation = 90;
+          else if (val === '-90') currentRotation = -90;
+          else currentRotation = 0;
+        } catch(e) { currentRotation = 0; }
+        applyRotation();
         updateOrientUI();
       }
 
-      function saveOrientation() {
-        try { localStorage.setItem(ORIENT_KEY, orientationMode); } catch(e) {}
+      function saveRotation() {
+        try { localStorage.setItem(ROTATION_KEY, String(currentRotation)); } catch(e) {}
       }
 
-      function applyOrientation() {
-        // Remove classe anterior
-        body.classList.remove('portrait', 'landscape');
-        if (orientationMode === 'landscape') {
-          body.classList.add('landscape');
-          // Tenta travar a orientação da tela (dispositivos móveis)
-          if (screen.orientation && screen.orientation.lock) {
+      function applyRotation() {
+        container.className = '';
+        if (currentRotation === 90) {
+          container.classList.add('rotated-right');
+        } else if (currentRotation === -90) {
+          container.classList.add('rotated-left');
+        }
+        // Redimensiona o canvas após a transição
+        setTimeout(resizeCanvas, 100);
+        // Tenta travar a orientação da tela (dispositivos móveis)
+        if (screen.orientation && screen.orientation.lock) {
+          if (currentRotation === 90 || currentRotation === -90) {
             screen.orientation.lock('landscape').catch(() => {});
-          }
-        } else {
-          body.classList.add('portrait');
-          if (screen.orientation && screen.orientation.lock) {
+          } else {
             screen.orientation.lock('portrait').catch(() => {});
           }
         }
-        // Recalcula o tamanho do canvas após a rotação
-        setTimeout(resizeCanvas, 100);
       }
 
-      function setOrientation(mode) {
-        orientationMode = mode;
-        saveOrientation();
-        applyOrientation();
+      function setRotation(deg) {
+        // deg deve ser 0, 90 ou -90
+        currentRotation = deg;
+        saveRotation();
+        applyRotation();
         updateOrientUI();
         resizeCanvas();
       }
 
-      function updateOrientUI() {
-        orientBtns.forEach(b => {
-          b.classList.toggle('toggle-on', b.dataset.orient === orientationMode);
-          b.classList.toggle('toggle-off', b.dataset.orient !== orientationMode);
-        });
+      function toggleOrientation(target) {
+        // target: 'portrait' (0) ou 'landscape' (90 ou -90)
+        // Se estiver em retrato e clicar em paisagem, gira para a esquerda (-90)
+        // Se estiver em paisagem e clicar em retrato, gira para a direita (0)
+        // Mas o usuário pode clicar no botão de paisagem estando já em paisagem? Vamos alternar.
+        if (target === 'portrait') {
+          // Se já estiver em retrato, não faz nada, senão volta para 0
+          if (currentRotation !== 0) {
+            setRotation(0);
+          }
+        } else if (target === 'landscape') {
+          // Se já estiver em paisagem, não faz nada, senão aplica -90 (esquerda)
+          if (currentRotation === 0) {
+            setRotation(-90); // gira para esquerda
+          } else if (currentRotation === 90) {
+            // Se estava virado para direita, pode virar para esquerda ou manter? Vamos alternar entre -90 e 90?
+            // O pedido: "quando o app estiver na posição retrato e clicar no botão paisagem, girar o app para a esquerda"
+            // então sempre que clicar em paisagem a partir do retrato, vai para -90.
+            // Se já estiver em -90, não faz nada.
+            // Se estiver em 90 (paisagem invertida), também deve ir para -90? Vamos padronizar: paisagem sempre -90.
+            setRotation(-90);
+          }
+        }
       }
 
-      orientBtns.forEach(btn => {
-        btn.addEventListener('click', () => setOrientation(btn.dataset.orient));
-      });
+      function updateOrientUI() {
+        portraitBtn.classList.toggle('active', currentRotation === 0);
+        landscapeBtn.classList.toggle('active', currentRotation === -90 || currentRotation === 90);
+      }
+
+      portraitBtn.addEventListener('click', () => toggleOrientation('portrait'));
+      landscapeBtn.addEventListener('click', () => toggleOrientation('landscape'));
 
       // ===== ÁUDIO =====
       function playChimeSound(count) {
@@ -1014,13 +1095,18 @@
 
       // ===== REDIMENSIONAR CANVAS =====
       function resizeCanvas() {
+        // O container pode estar rotacionado, então as dimensões da janela são trocadas
         const w = window.innerWidth;
         const h = window.innerHeight;
-        // Em modo paisagem, as dimensões estão trocadas devido à rotação CSS
-        // Mas o canvas ocupa 100vw e 100vh, então as coordenadas são as mesmas.
-        canvas.width = w;
-        canvas.height = h;
-        // Ajusta posição dos painéis se necessário
+        if (currentRotation === 90 || currentRotation === -90) {
+          // Em paisagem, trocamos as dimensões para o canvas
+          canvas.width = h;
+          canvas.height = w;
+        } else {
+          canvas.width = w;
+          canvas.height = h;
+        }
+        // Ajusta posição dos painéis
         if (panel.classList.contains('visible')) {
           const rect = panel.getBoundingClientRect();
           if (rect.right > w) panelPos.x = w - rect.width - 10;
@@ -1119,7 +1205,8 @@
       }
 
       function renderClock() {
-        const w = canvas.width, h = canvas.height;
+        const w = canvas.width;
+        const h = canvas.height;
         ctx.clearRect(0, 0, w, h);
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, w, h);
@@ -1140,11 +1227,12 @@
 
         const cx = w/2 + offsetX;
         const cy = h/2 + offsetY;
+        // Raio baseado na orientação (se estiver em paisagem, usa a largura)
         let r;
-        if (orientationMode === 'landscape') {
-          r = w * 0.38;
+        if (currentRotation === 90 || currentRotation === -90) {
+          r = w * 0.38; // paisagem
         } else {
-          r = Math.min(w, h) * 0.4;
+          r = Math.min(w, h) * 0.4; // retrato
         }
         const ptrFactor = pointerScale / 100;
 
@@ -1446,7 +1534,7 @@
         reader.readAsDataURL(file);
       });
 
-      // ===== BADALADAS (LIGA/DESLIGA) =====
+      // ===== BADALADAS =====
       function loadChimeState() {
         try {
           const val = localStorage.getItem(KEY_CHIME);
@@ -1516,10 +1604,10 @@
         try {
           const keys = Object.keys(localStorage);
           keys.forEach(k => {
-            if (k.startsWith(KEY_IMG_CONFIG_PREFIX) || 
-                k === KEY || k === KEY_LAST || k === KEY_CHIME || 
+            if (k.startsWith(KEY_IMG_CONFIG_PREFIX) ||
+                k === KEY || k === KEY_LAST || k === KEY_CHIME ||
                 k === KEY_WAKELOCK || k === KEY_CHIME_INTERVAL ||
-                k === ORIENT_KEY) {
+                k === ROTATION_KEY) {
               localStorage.removeItem(k);
             }
           });
@@ -1550,13 +1638,15 @@
           updateDisplay();
           renderClock();
           loadChimeSound(DEFAULT_CHIME_URL);
-          orientationMode = 'portrait';
-          saveOrientation();
-          applyOrientation();
+          // reset rotação
+          currentRotation = 0;
+          saveRotation();
+          applyRotation();
           updateOrientUI();
           resizeCanvas();
         } catch(e) { console.error('Erro ao limpar:', e); }
       }
+
       function clearAllStorage() {
         if (confirm('⚠️ Apagar TODOS os dados deste site?')) {
           try {
@@ -1588,9 +1678,9 @@
             updateDisplay();
             renderClock();
             loadChimeSound(DEFAULT_CHIME_URL);
-            orientationMode = 'portrait';
-            saveOrientation();
-            applyOrientation();
+            currentRotation = 0;
+            saveRotation();
+            applyRotation();
             updateOrientUI();
             resizeCanvas();
           } catch(e) { console.error('Erro ao limpar tudo:', e); }
@@ -1605,7 +1695,7 @@
       loadChimeState();
       loadWakeLockState();
       loadChimeInterval();
-      loadOrientation();
+      loadRotation(); // carrega rotação
       loadAllSettings();
 
       if (imgData) {
